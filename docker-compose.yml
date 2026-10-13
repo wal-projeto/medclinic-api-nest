@@ -1,0 +1,16 @@
+name: medclinic-api-nestjs-db
+services:
+  database:
+    image: postgres:18-alpine
+    container_name: pg
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: medclinic-api
+    ports:
+      - "5433:5432" #porta-da-sua-máquina:porta-dentro-do-container
+    volumes:
+      - pgdata:/var/lib/postgresql/18/data
+
+volumes:
+  pgdata:
