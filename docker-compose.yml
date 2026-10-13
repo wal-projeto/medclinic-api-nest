@@ -10,7 +10,7 @@ services:
     ports:
       - "5433:5432" #porta-da-sua-máquina:porta-dentro-do-container
     volumes:
-      - pgdata:/var/lib/postgresql/18/data
+      - pgdata:/var/lib/postgresql/18/docker
 
 volumes:
   pgdata:
