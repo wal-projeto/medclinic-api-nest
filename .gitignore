@@ -8,6 +8,9 @@ dist/
 node_modules/
 *.log
 
+*.tsbuildinfo
+
+
 # Environment
 .env
 
