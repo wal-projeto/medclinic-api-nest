@@ -2,6 +2,10 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
+## Board do projeto
+
+[Board de gestão — MedClinic API, Etapa 2](https://github.com/users/wal-projeto/projects/4)
+
 [circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
 [circleci-url]: https://circleci.com/gh/nestjs/nest
 
