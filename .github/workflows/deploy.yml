@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: write
@@ -33,5 +37,5 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
 
       - name: Trigger deploy
-        
-        run: curl --data-urlencode "imgURL=ghcr.io/${{ github.repository }}:${{ github.sha }}" "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+        run: curl --fail -G --data-urlencode "imgURL=ghcr.io/${{ github.repository }}:${{ github.sha }}" "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
