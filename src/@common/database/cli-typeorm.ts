@@ -12,6 +12,7 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   synchronize: false,
+  ssl: process.env.DB_SSL === 'true',
   entities: ENTITIES,
   namingStrategy: new SnakeCaseNamingStrategy(),
   migrations: [__dirname + '/migrations/**/*{.js,.ts}'],

@@ -2,7 +2,7 @@ import { FactoryProvider } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 
-import { APIEnv } from '../../env';
+import { APIEnv, DbLogLevel } from '../../env';
 import { User } from '../../user/user.entity';
 import { SnakeCaseNamingStrategy } from './snake-case-naming-pattern';
 
@@ -19,7 +19,8 @@ export const databaseProvider: FactoryProvider = {
       password: configService.getOrThrow('DB_PASSWORD'),
       database: configService.getOrThrow('DB_NAME'),
       synchronize: false,
-      logging: configService.getOrThrow('DB_LOG_LEVEL'),
+      logging: [configService.getOrThrow<DbLogLevel>('DB_LOG_LEVEL')],
+      ssl: configService.getOrThrow('DB_SSL'),
       entities: ENTITIES,
       namingStrategy: new SnakeCaseNamingStrategy(),
       migrations: [__dirname + '/migrations/**/*{.js,.ts}'],
