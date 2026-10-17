@@ -1,6 +1,23 @@
 import { LOG_LEVELS, type LogLevel } from '@nestjs/common';
-import { plainToInstance, Type } from 'class-transformer';
-import { IsIn, IsNumber, validateSync } from 'class-validator';
+import { plainToInstance, Transform, Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsIn,
+  IsNumber,
+  IsString,
+  validateSync,
+} from 'class-validator';
+
+const DB_LOG_LEVELS = [
+  'query',
+  'schema',
+  'error',
+  'warn',
+  'info',
+  'log',
+  'migration',
+] as const;
+export type DbLogLevel = (typeof DB_LOG_LEVELS)[number];
 
 export function validateEnv(config: unknown) {
   const apiEnv = plainToInstance(APIEnv, config);
@@ -18,4 +35,27 @@ export class APIEnv {
 
   @IsIn(LOG_LEVELS)
   LOG_LEVEL!: LogLevel;
+
+  @IsString()
+  DB_HOST!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  DB_PORT = 5432;
+
+  @IsString()
+  DB_USER!: string;
+
+  @IsString()
+  DB_PASSWORD!: string;
+
+  @IsString()
+  DB_NAME!: string;
+
+  @IsIn(DB_LOG_LEVELS)
+  DB_LOG_LEVEL: DbLogLevel = 'error';
+
+  @Transform(({ value }) => value === 'true')
+  @IsBoolean()
+  DB_SSL = false;
 }
