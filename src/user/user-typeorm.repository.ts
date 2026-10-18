@@ -20,6 +20,8 @@ export class UserTypeormRepository implements UserRepository {
         email: true,
         password: true,
         roles: true,
+        createdAt: true,
+        updatedAt: true,
       },
       where: { email },
     });

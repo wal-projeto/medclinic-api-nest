@@ -5,6 +5,8 @@ import { LoginDto } from './dtos/login.dto';
 import { User } from './user.entity';
 import { UserRepository } from './user.repository';
 
+const DUMMY_PASSWORD_HASH =
+  '$argon2id$v=19$m=65536,p=4,t=3$dmEBa6j4J+TrGw1bXCMXDg$7KfNGA8bvDW09y9Exe2ckdqWS07o8/sXdiJAE/YSqDA';
 @Injectable()
 export class UserService {
   constructor(
@@ -13,25 +15,19 @@ export class UserService {
   ) {}
 
   async login(input: LoginDto): Promise<Omit<User, 'password'>> {
+    // Busca no repositorio um Usuário com o e-mail recebido dentro do LoginDto
     const user = await this.userRepository.findByEmailWithPassword(input.email);
-
-    if (!user) {
-      throw new AppException(
-        'CREDENCIAIS_INVALIDAS',
-        'Email ou senha inválidos.',
-      );
-    }
 
     const passwordMatches = await this.passwordService.compare(
       input.password,
-      user.password,
+      user?.password ?? DUMMY_PASSWORD_HASH,
     );
 
-    if (!passwordMatches) {
+    if (!user || !passwordMatches) { 
       throw new AppException(
         'CREDENCIAIS_INVALIDAS',
         'Email ou senha inválidos.',
-      );
+      ); 
     }
 
     const { password: _password, ...userWithoutPassword } = user;

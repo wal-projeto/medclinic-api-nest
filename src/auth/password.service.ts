@@ -8,6 +8,10 @@ export class PasswordService {
   }
 
   async compare(password: string, hash: string): Promise<boolean> {
-    return argon2.verify(hash, password);
+    try {
+      return await argon2.verify(hash, password);
+    } catch {
+      return false;
+    }
   }
 }
