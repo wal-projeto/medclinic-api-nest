@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './env';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
@@ -18,9 +16,8 @@ import { AppValidationPipe } from './@common/pipes/app-validation.pipe';
     AuthModule,
     UserModule,
   ],
-  controllers: [AppController, HealthController],
+  controllers: [HealthController],
   providers: [
-    AppService,
     {
       provide: APP_FILTER,
       useClass: AppExceptionFilter,
