@@ -22,7 +22,7 @@ import { AppValidationPipe } from './@common/pipes/app-validation.pipe';
       provide: APP_FILTER,
       useClass: AppExceptionFilter,
     },
-    { 
+    {
       provide: APP_PIPE,
       useClass: AppValidationPipe,
     },

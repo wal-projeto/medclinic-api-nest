@@ -23,11 +23,11 @@ export class UserService {
       user?.password ?? DUMMY_PASSWORD_HASH,
     );
 
-    if (!user || !passwordMatches) { 
+    if (!user || !passwordMatches) {
       throw new AppException(
         'CREDENCIAIS_INVALIDAS',
         'Email ou senha inválidos.',
-      ); 
+      );
     }
 
     const { password: _password, ...userWithoutPassword } = user;
