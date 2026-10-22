@@ -77,6 +77,8 @@ export class AppExceptionFilter implements ExceptionFilter {
     }
 
     // Erro inesperado: o detalhe fica só no log, nunca na resposta.
+    // A lista de códigos de erro da API não tem um cod. para falhas do servidor,
+    // por isso este caso responde com ERRO_INTERNO.         
     this.logger.error(exception);
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -84,4 +86,4 @@ export class AppExceptionFilter implements ExceptionFilter {
       message: 'Erro interno do servidor.',
     });
   }
-}
+} // { statusCode: 500, error: 'ERRO_INTERNO', message: 'Erro interno do servidor.' }
