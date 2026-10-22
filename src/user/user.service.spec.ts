@@ -50,14 +50,14 @@ describe('UserService', () => {
       expect(erro).toBeInstanceOf(AppException);
       expect(erro.errorCode).toBe('CREDENCIAIS_INVALIDAS');
     });
-    
-      it('lança CREDENCIAIS_INVALIDAS quando o email não existe', async () => {
-        const erro = await service
-          .login({ email: 'naoexiste@clinica.com', password: 'qualquer-senha' })
-          .catch((err) => err);
 
-        expect(erro).toBeInstanceOf(AppException);
-        expect(erro.errorCode).toBe('CREDENCIAIS_INVALIDAS');
+    it('lança CREDENCIAIS_INVALIDAS quando o email não existe', async () => {
+      const erro = await service
+        .login({ email: 'naoexiste@clinica.com', password: 'qualquer-senha' })
+        .catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('CREDENCIAIS_INVALIDAS');
     });
   });
 });
