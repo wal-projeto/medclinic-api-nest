@@ -33,6 +33,18 @@ const STATUS_ERROR_CODE: Partial<Record<number, ErrorCode>> = {
   404: 'RECURSO_NAO_ENCONTRADO',
 };
 
+// Junta as mensagens de validação (uma por campo) em um texto só, separado por "; ".
+function extractMessage(exception: HttpException): string {
+  const body = exception.getResponse();
+
+  if (typeof body === 'object' && body !== null && 'message' in body) {
+    const detail = body.message;
+    if (Array.isArray(detail)) return detail.join('; ');
+    if (typeof detail === 'string') return detail;
+  }
+
+  return exception.message;
+}
 
 @Catch()
 export class AppExceptionFilter implements ExceptionFilter {
@@ -41,6 +53,7 @@ export class AppExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
 
+    // Erro de regra de negócio lançado pelo nosso código.
     if (exception instanceof AppException) {
       const status = ERROR_STATUS[exception.errorCode];
       response.status(status).json({
@@ -51,18 +64,19 @@ export class AppExceptionFilter implements ExceptionFilter {
       return;
     }
 
-
+    // Erro HTTP lançado pelo Nest (validação, rota inexistente etc.).
     if (exception instanceof HttpException) {
       this.logger.error(exception);
       const status = exception.getStatus();
       response.status(status).json({
         statusCode: status,
         error: STATUS_ERROR_CODE[status] ?? 'DADOS_INVALIDOS',
-        message: exception.message,
+        message: extractMessage(exception),
       });
       return;
     }
 
+    // Erro inesperado: o detalhe fica só no log, nunca na resposta.
     this.logger.error(exception);
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
