@@ -5,6 +5,7 @@ import {
   IsEmail,
   IsIn,
   IsNumber,
+  IsOptional,
   IsString,
   MinLength,
   validateSync,
@@ -23,7 +24,11 @@ export type DbLogLevel = (typeof DB_LOG_LEVELS)[number];
 
 export function validateEnv(config: unknown) {
   const apiEnv = plainToInstance(APIEnv, config);
-  const result = validateSync(apiEnv, { whitelist: true });
+  const result = validateSync(apiEnv, {
+    whitelist: true,
+    validationError: { target: false, value: false },
+  });
+
   if (result.length > 0) {
     throw new Error(JSON.stringify(result, null));
   }
@@ -61,10 +66,12 @@ export class APIEnv {
   @IsBoolean()
   DB_SSL = false;
 
+  @IsOptional()
   @IsEmail()
-  ADMIN_EMAIL!: string;
+  ADMIN_EMAIL?: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(8)
-  ADMIN_PASSWORD!: string;
+  ADMIN_PASSWORD?: string;
 }

@@ -14,12 +14,16 @@ export class SeedAdmin1792755514301 implements MigrationInterface {
       );
     }
 
+    if (password.length < 8) {
+      throw new Error('ADMIN_PASSWORD deve ter no mínimo 8 caracteres.');
+    }
+
     const passwordHash = await new PasswordService().hash(password);
 
     await queryRunner.query(
       `INSERT INTO "user" ("name", "email", "password", "roles")
        VALUES ($1, $2, $3, ARRAY['admin']::"public"."user_roles_enum"[])
-       ON CONFLICT ("email") DO NOTHING`,
+       ON CONFLICT ("email") DO UPDATE SET "roles" = EXCLUDED."roles"`,
       ['Administrador', email, passwordHash],
     );
   }
