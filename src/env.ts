@@ -2,9 +2,11 @@ import { LOG_LEVELS, type LogLevel } from '@nestjs/common';
 import { plainToInstance, Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsEmail,
   IsIn,
   IsNumber,
   IsString,
+  MinLength,
   validateSync,
 } from 'class-validator';
 
@@ -58,4 +60,11 @@ export class APIEnv {
   @Transform(({ value }) => value === 'true')
   @IsBoolean()
   DB_SSL = false;
+
+  @IsEmail()
+  ADMIN_EMAIL!: string;
+
+  @IsString()
+  @MinLength(8)
+  ADMIN_PASSWORD!: string;
 }
