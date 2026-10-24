@@ -53,7 +53,7 @@ export class JwtGuard implements CanActivate {
   private extractToken(request: Request): string {
     const [tipo, token] = (request.headers.authorization ?? '').split(' ');
 
-    if (tipo !== 'Bearer' || !token) {
+    if (tipo.toLocaleLowerCase() !== 'bearer' || !token) {
       throw new AppException('NAO_AUTENTICADO', 'Token ausente ou malformado.');
     }
 
