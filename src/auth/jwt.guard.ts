@@ -2,7 +2,9 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { AppException } from '../@common/exceptions/app.exception';
+import { Role } from '../user/user.entity';
 import { PUBLIC_ROUTE_KEY } from './decorator/public-route.decorator';
+import { REQUIRED_ROLES_KEY } from './decorator/require-role.decorator';
 import { AuthUser, JwtService } from './jwt.service';
 
 export type AuthRequest = Request & { user?: AuthUser };
@@ -25,19 +27,32 @@ export class JwtGuard implements CanActivate {
       return true;
     }
 
-    // Extai o token e confere
     const request = context.switchToHttp().getRequest<AuthRequest>();
-    request.user = this.jwtService.verify(this.extractToken(request));
-    //anexa o usuário na requesição : request.use = { id: 1, roles: ['admin']}
+    const user = this.jwtService.verify(this.extractToken(request));
+
+    const perfisExigidos = this.reflector.getAllAndOverride<Role[] | undefined>(
+      REQUIRED_ROLES_KEY,
+      alvos,
+    );
+
+    if (
+      perfisExigidos &&
+      !perfisExigidos.some((perfil) => user.roles.includes(perfil))
+    ) {
+      throw new AppException(
+        'ACESSO_NEGADO',
+        'Você não tem permissão para esta operação.',
+      );
+    }
+
+    request.user = user;
 
     return true;
   }
 
-  // Lê o cabeçalho Authorization e separa em duas partes: 'Bearer eyJ...' → tipo='Bearer', token='eyJ...'
   private extractToken(request: Request): string {
     const [tipo, token] = (request.headers.authorization ?? '').split(' ');
 
-    // Sem Bearer ou sem token → 401 NAO_AUTORIZADO
     if (tipo !== 'Bearer' || !token) {
       throw new AppException('NAO_AUTENTICADO', 'Token ausente ou malformado.');
     }
