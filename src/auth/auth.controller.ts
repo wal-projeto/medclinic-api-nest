@@ -12,7 +12,7 @@ export class AuthController {
   ) {}
 
   @PublicRoute()
-  @Post()
+  @Post('login')
   @HttpCode(200)
   async login(@Body() body: LoginDto): Promise<{ accessToken: string }> {
     const user = await this.userService.login(body);
