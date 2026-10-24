@@ -74,4 +74,10 @@ export class APIEnv {
   @IsString()
   @MinLength(8)
   ADMIN_PASSWORD?: string;
+
+  @IsString()
+  JWT_SECRET!: string;
+
+  @IsString()
+  JWT_EXPIRES_IN = '8h';
 }
