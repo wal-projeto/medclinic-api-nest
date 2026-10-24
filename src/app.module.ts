@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './env';
-import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { AppExceptionFilter } from './@common/filters/app-exception.filter';
 import { HealthController } from './health.controller';
 import { DatabaseModule } from './@common/database/database.module';
 import { AuthModule } from './auth/auth.module';
+import { JwtGuard } from './auth/jwt.guard';
 import { UserModule } from './user/user.module';
 import { AppValidationPipe } from './@common/pipes/app-validation.pipe';
 
@@ -25,6 +26,10 @@ import { AppValidationPipe } from './@common/pipes/app-validation.pipe';
     {
       provide: APP_PIPE,
       useClass: AppValidationPipe,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtGuard,
     },
   ],
 })
