@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   MinLength,
   validateSync,
 } from 'class-validator';
@@ -74,4 +75,12 @@ export class APIEnv {
   @IsString()
   @MinLength(8)
   ADMIN_PASSWORD?: string;
+
+  @MinLength(32)
+  @IsString()
+  JWT_SECRET!: string;
+
+  @Matches(/^\d+[smhd]$/)
+  @IsString()
+  JWT_EXPIRES_IN = '8h';
 }
