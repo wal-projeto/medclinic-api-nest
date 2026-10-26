@@ -26,4 +26,8 @@ export class UserTypeormRepository implements UserRepository {
       where: { email },
     });
   }
+
+  findById(id: number): Promise<User | null> {
+    return this.repository.findOne({ where: { id } });
+  }
 }

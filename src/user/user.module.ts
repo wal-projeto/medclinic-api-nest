@@ -6,9 +6,11 @@ import {
   TYPEORM_USER_REPOSITORY,
   UserTypeormRepository,
 } from './user-typeorm.repository';
+import { UserController } from './user.controller';
 import { UserService } from './user.service';
 
 @Module({
+  controllers: [UserController],
   providers: [
     { provide: UserRepository, useClass: UserTypeormRepository },
     {

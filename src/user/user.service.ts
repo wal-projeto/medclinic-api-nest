@@ -14,6 +14,7 @@ export class UserService {
     private readonly passwordService: PasswordService,
   ) {}
 
+  // LOGIN
   async login(input: LoginDto): Promise<Omit<User, 'password'>> {
     // Busca no repositorio um Usuário com o e-mail recebido dentro do LoginDto
     const user = await this.userRepository.findByEmailWithPassword(input.email);
@@ -33,5 +34,21 @@ export class UserService {
     const { password: _password, ...userWithoutPassword } = user;
 
     return userWithoutPassword;
+  }
+
+  // OBTER USUÁRIO me
+  async me(id: number) {
+    const user = await this.userRepository.findById(id);
+
+    if (!user) {
+      throw new AppException('NAO_AUTENTICADO', 'Token inválido ou expirado.');
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      roles: user.roles,
+    };
   }
 }

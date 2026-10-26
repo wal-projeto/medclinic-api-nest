@@ -12,9 +12,15 @@ class UserRepositoryFake implements UserRepository {
     const user = this.users.find((user) => user.email === email) ?? null;
     return Promise.resolve(user);
   }
+
+  findById(id: number): Promise<User | null> {
+    const user = this.users.find((user) => user.id === id) ?? null;
+    return Promise.resolve(user);
+  }
 }
 
 describe('UserService', () => {
+  // LOGIN
   describe('login', () => {
     const passwordService = new PasswordService();
     let service: UserService;
@@ -58,6 +64,42 @@ describe('UserService', () => {
 
       expect(erro).toBeInstanceOf(AppException);
       expect(erro.errorCode).toBe('CREDENCIAIS_INVALIDAS');
+    });
+  });
+
+  // ME
+  describe('me', () => {
+    const usuario: User = {
+      id: 1,
+      name: 'Ana',
+      email: 'ana2@clinica.com',
+      password: 'hash-qualquer',
+      roles: ['secretary'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const service = new UserService(
+      new UserRepositoryFake([usuario]),
+      new PasswordService(),
+    );
+
+    it('devolve id, nome, e-mail e perfis do usuário, sem a senha', async () => {
+      const resultado = await service.me(1);
+
+      expect(resultado).toEqual({
+        id: 1,
+        name: 'Ana',
+        email: 'ana2@clinica.com',
+        roles: ['secretary'],
+      });
+      expect(resultado).not.toHaveProperty('password');
+    });
+
+    it('lança NAO_AUTENTICADO quando o usuário do token não existe mais', async () => {
+      const erro = await service.me(999).catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('NAO_AUTENTICADO');
     });
   });
 });
