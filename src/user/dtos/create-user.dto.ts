@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
@@ -11,6 +12,8 @@ import {
 import { ROLES, type Role } from '../user.entity';
 
 export class CreateUserDto {
+  // Registra: "antes de validar, passe o name por esta função". Roda quando o pipe fabrica a instância
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
