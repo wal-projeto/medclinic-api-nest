@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PasswordService } from '../auth/password.service';
 import { AppException } from '../@common/exceptions/app.exception';
 import { LoginDto } from './dtos/login.dto';
+import { CreateUserDto } from './dtos/create-user.dto';
 import { User } from './user.entity';
 import { UserRepository } from './user.repository';
 
@@ -43,7 +44,27 @@ export class UserService {
     if (!user) {
       throw new AppException('NAO_AUTENTICADO', 'Token inválido ou expirado.');
     }
+    return this.toResponse(user); // um único lugar que decide o que sai. O me e o create usam o mesmo
+  }
 
+  // CRIAR USUÁRIO
+  async create(input: CreateUserDto) {
+    if (await this.userRepository.existsByEmail(input.email)) {
+      throw new AppException('EMAIL_JA_CADASTRADO', 'E-mail já cadastrado.');
+    }
+
+    const user = await this.userRepository.create({
+      // grava só os 4 campos permitidos
+      name: input.name,
+      email: input.email,
+      password: await this.passwordService.hash(input.password),
+      roles: input.roles,
+    });
+
+    return this.toResponse(user); // devolve só os 4 campos públicos
+  }
+
+  private toResponse(user: User) {
     return {
       id: user.id,
       name: user.name,
