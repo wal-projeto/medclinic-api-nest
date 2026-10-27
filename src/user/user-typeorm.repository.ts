@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
-import { UserRepository } from './user.repository';
+import { NewUser, UserRepository } from './user.repository';
 
 export const TYPEORM_USER_REPOSITORY = 'TYPEORM_USER_REPOSITORY' as const;
 
@@ -29,5 +29,13 @@ export class UserTypeormRepository implements UserRepository {
 
   findById(id: number): Promise<User | null> {
     return this.repository.findOne({ where: { id } });
+  }
+
+  existsByEmail(email: string): Promise<boolean> {
+    return this.repository.existsBy({ email });
+  }
+
+  create(data: NewUser): Promise<User> {
+    return this.repository.save(this.repository.create(data));
   }
 }
