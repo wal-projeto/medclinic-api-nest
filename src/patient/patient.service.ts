@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { AppException } from '../@common/exceptions/app.exception';
+import { paginate } from '../@common/pagination/paginated';
 import { CreatePatientDto } from './dtos/create-patient.dto';
+import { ListPatientsQueryDto } from './dtos/list-patients-query.dto';
 import { Patient } from './patient.entity';
 import { PatientRepository } from './patient.repository';
 
@@ -8,6 +10,7 @@ import { PatientRepository } from './patient.repository';
 export class PatientService {
   constructor(private readonly patientRepository: PatientRepository) {}
 
+  // CREATE
   async create(input: CreatePatientDto) {
     if (await this.patientRepository.existsByCpf(input.cpf)) {
       // CPF já existe?
@@ -21,6 +24,25 @@ export class PatientService {
     });
 
     return this.toResponse(patient); // Devolve o formato do contrato
+  }
+
+  // Recebe a query já validada e convertida em números : ?page=3&pageSize=10&name=mar
+  // { page: 3, pageSize: 10, name: "mar" }
+  async list(query: ListPatientsQueryDto) {
+    const { patients, total } = await this.patientRepository.findPage({
+      // Pede a página à porta e desmonta a resposta
+      name: query.name, // repassa o nome
+      skip: (query.page - 1) * query.pageSize, // A conta da paginação: páginas anteriores × tamanho : (3 − 1) × 10 = 20 → pula 20
+      take: query.pageSize, // Pega o tamanho da página	10
+    });
+
+    return paginate(
+      // chama a função de paginated.ts e monta  { data, meta }
+      patients.map((patient) => this.toResponse(patient)),
+      total,
+      query.page,
+      query.pageSize,
+    );
   }
 
   private toResponse(patient: Patient) {
