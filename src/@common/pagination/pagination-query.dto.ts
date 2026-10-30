@@ -5,6 +5,7 @@ export class PaginationQueryDto {
   @Type(() => Number) //Converte o texto da URL em número antes de validar	: "2" → 2; "abc" → NaN; "" → 0
   @IsInt() // Tem que ser número inteiro: 1.5 ✗; NaN ✗
   @Min(1) // No mínimo 1 : 0 ✗; -1 ✗
+  @Max(Number.MAX_SAFE_INTEGER) // No máximo 9007199254740991: acima disso, o deslocamento estoura o banco:100000000000000000 ✗ (400)
   page: number = 1; // Valor padrão: se page não vier na URL, fica 1
 
   @Type(() => Number)
