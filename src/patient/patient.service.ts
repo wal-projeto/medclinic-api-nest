@@ -10,7 +10,7 @@ import { PatientRepository } from './patient.repository';
 export class PatientService {
   constructor(private readonly patientRepository: PatientRepository) {}
 
-  // CREATE
+  // CREATE PACIENTE
   async create(input: CreatePatientDto) {
     if (await this.patientRepository.existsByCpf(input.cpf)) {
       // CPF já existe?
@@ -26,6 +26,7 @@ export class PatientService {
     return this.toResponse(patient); // Devolve o formato do contrato
   }
 
+  // LISTA PACIENTE COM PAGINAÇÃO
   // Recebe a query já validada e convertida em números : ?page=3&pageSize=10&name=mar
   // { page: 3, pageSize: 10, name: "mar" }
   async list(query: ListPatientsQueryDto) {
@@ -44,9 +45,21 @@ export class PatientService {
       query.pageSize,
     );
   }
+  // LISTA PACIENTE POR id
+  async findById(id: number) {
+    const patient = await this.patientRepository.findById(id); // Pergunta à porta PatientRepository : patient = Maria, ou null
 
+    if (!patient) {
+      throw new AppException(
+        'RECURSO_NAO_ENCONTRADO',
+        'Paciente não encontrado',
+      );
+    }
+    return this.toResponse(patient);
+  }
+
+  // Monta a resposta com os 4 campos { id: 2, name: 'Maria Souza', cpf: '98765432100', createdAt }  updateAt e deleteAt ficam de fora
   private toResponse(patient: Patient) {
-    // Monta a resposta com os 4 campos { id: , name: , cpf: , createAt: Date } updateAt e deleteAt ficam de fora
     return {
       id: patient.id,
       name: patient.name,
