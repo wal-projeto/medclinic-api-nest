@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ILike, Repository } from 'typeorm';
 import { Patient } from './patient.entity';
+import { MAX_INTEGER } from '../@common/database/postgres-limits';
 import {
   NewPatient,
   PatientFilter,
@@ -37,6 +38,14 @@ export class PatientTypeormRepository implements PatientRepository {
       take,
     });
     return { patients, total }; // Devolve no formato da porta	{ patients: [...], total: 2 }
+  }
+
+  //BUSCA UM PACIENTE PELO id - recebe o id já como número
+  findById(id: number): Promise<Patient | null> {
+    if (id < 1 || id > MAX_INTEGER) {
+      return Promise.resolve(null); // 0, -1, 99999999999 -> null sem consultar o banco - 404
+    }
+    return this.repository.findOne({ where: { id } });
   }
 }
 

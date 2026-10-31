@@ -52,6 +52,13 @@ class PatientRepositoryFake implements PatientRepository {
       total: found.length,
     });
   }
+
+  // procura o primeiro com o id recebido. ?? null troca o undefined (não achou) por null, como o banco faria
+  findById(id: number): Promise<Patient | null> {
+    return Promise.resolve(
+      this.patients.find((patient) => patient.id === id) ?? null,
+    );
+  }
 }
 
 describe('PatientService', () => {
@@ -165,6 +172,41 @@ describe('PatientService', () => {
         data: [],
         meta: { total: 0, page: 1, pageSize: 20, totalPages: 0 },
       });
+    });
+  });
+
+  // TESTANDO PACIENTE POR id
+  describe('findById', () => {
+    const data = new Date('2026-10-20T14:03:11.000Z');
+    const carlos: Patient = {
+      // um paciente completo, como sai do banco
+      id: 1,
+      name: 'Carlos Pereira',
+      cpf: '12345678901',
+      createdAt: data,
+      updatedAt: data,
+      deletedAt: null,
+    };
+    const service = new PatientService(new PatientRepositoryFake([carlos]));
+
+    // A resposta tem exatamente os 4 campos do cadastro(sem updatedAt)
+    it('devolve o paciente no mesmo formato do cadastro', async () => {
+      const resultado = await service.findById(1);
+
+      expect(resultado).toEqual({
+        id: 1,
+        name: 'Carlos Pereira',
+        cpf: '12345678901',
+        createdAt: data,
+      });
+    });
+
+    // O caminho de erro: a exceção certa, com o código certo
+    it('lança RECURSO_NAO_ENCONTRADO quando o paciente não existe', async () => {
+      const erro = await service.findById(999).catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
     });
   });
 });
