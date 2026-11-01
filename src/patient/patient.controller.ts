@@ -4,12 +4,14 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
 import { RequireRole } from '../auth/decorator/require-role.decorator';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { ListPatientsQueryDto } from './dtos/list-patients-query.dto';
+import { UpdatePatientDto } from './dtos/update-patient.dto';
 import { PatientService } from './patient.service';
 
 @Controller('patients') // api/v1/patients
@@ -32,5 +34,15 @@ export class PatientController {
   @Get(':id') // GET /api/v1/patients/:id . Sem @RequireRole: pega o :id e passa pelo pipe : "2" -> 2 ; "abc"-> 400
   findById(@Param('id', ParseIntPipe) id: number) {
     return this.patientService.findById(id);
+  }
+
+  @Patch(':id') // PATCH /api/v1/patients/:id : só admin e secretary; doctor → 403
+  @RequireRole(['admin', 'secretary'])
+  update(
+    // 	o Prettier quebra os parâmetros em linhas, porque não cabem em 80 colunas
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdatePatientDto,
+  ) {
+    return this.patientService.update(id, body);
   }
 }

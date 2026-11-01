@@ -47,6 +47,11 @@ export class PatientTypeormRepository implements PatientRepository {
     }
     return this.repository.findOne({ where: { id } });
   }
+
+  // Grava as mudanças: como o paciente já tem id, o save faz um UPDATE ( e o updated_at muda sozinho
+  save(patient: Patient): Promise<Patient> {
+    return this.repository.save(patient); // o Repository do TypeORM grava: com id → SELECT + UPDATE
+  }
 }
 
 // withDeleted: true? Normalmente o TypeORM esconde as linhas com deletedAt, então

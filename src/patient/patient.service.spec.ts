@@ -3,6 +3,7 @@ import { AppException } from '../@common/exceptions/app.exception';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { Patient } from './patient.entity';
 import { ListPatientsQueryDto } from './dtos/list-patients-query.dto';
+import { UpdatePatientDto } from './dtos/update-patient.dto';
 import {
   NewPatient,
   PatientFilter,
@@ -15,6 +16,8 @@ import { PatientService } from './patient.service';
 class PatientRepositoryFake implements PatientRepository {
   // O fake anota o último pedido recebido, para o teste conferir a conta do service : { name: 'mar', skip: 20, take: 10 }
   lastFilter?: PatientFilter;
+  // o face anota o último paciente gravado, para o teste conferir o que foi salvo
+  lastSaved?: Patient;
   constructor(readonly patients: Patient[]) {}
 
   // "Existe?" = algum item da lista tem esse CPF. Ex: [] → false
@@ -58,6 +61,12 @@ class PatientRepositoryFake implements PatientRepository {
     return Promise.resolve(
       this.patients.find((patient) => patient.id === id) ?? null,
     );
+  }
+
+  // GRAVA: anota o paciente recebido e o devolve, como o banc faria."
+  save(patient: Patient): Promise<Patient> {
+    this.lastSaved = patient;
+    return Promise.resolve(patient);
   }
 }
 
@@ -207,6 +216,56 @@ describe('PatientService', () => {
 
       expect(erro).toBeInstanceOf(AppException);
       expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
+    });
+  });
+
+  // TESTANDO A ALTERAÇÃO DO NOME
+  describe('update', () => {
+    const data = new Date('2026-10-20T14:03:11.000Z');
+    let repository: PatientRepositoryFake;
+    let service: PatientService;
+
+    beforeEach(() => {
+      repository = new PatientRepositoryFake([
+        {
+          id: 1,
+          name: 'Carlos Pereira',
+          cpf: '12345678901',
+          createdAt: data,
+          updatedAt: data,
+          deletedAt: null,
+        },
+      ]);
+      service = new PatientService(repository);
+    });
+
+    // O nome muda, o cpf continua, e a resposta tem os 4 campos do cadastro
+    it('altera o nome e devolve o paciente no formato do cadastro', async () => {
+      const input = {
+        name: 'Carlos Alberto Pereira',
+      } satisfies UpdatePatientDto; // confere o objeto contra o DTO sem passar pelo pipe (o Prettier quebra o primeiro em 3 linhas)
+
+      const resultado = await service.update(1, input);
+
+      expect(resultado).toEqual({
+        //a resposta tem exatamente os 4 campos, com o nome novo	sem updatedAt
+        id: 1,
+        name: 'Carlos Alberto Pereira',
+        cpf: '12345678901',
+        createdAt: data,
+      });
+      expect(repository.lastSaved?.name).toBe('Carlos Alberto Pereira'); //o service gravou o nome novo, não só devolveu
+    });
+
+    // Paciente que não existe: a exceção certa, e nada é gravado
+    it('lança RECURSO_NAO_ENCONTRADO quando o paciente não existe e não grava nada', async () => {
+      const input = { name: 'Outro Nome' } satisfies UpdatePatientDto;
+
+      const erro = await service.update(999, input).catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
+      expect(repository.lastSaved).toBeUndefined(); //com paciente inexistente, o save nem foi chamado
     });
   });
 });
