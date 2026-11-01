@@ -18,6 +18,9 @@ class PatientRepositoryFake implements PatientRepository {
   lastFilter?: PatientFilter;
   // o face anota o último paciente gravado, para o teste conferir o que foi salvo
   lastSaved?: Patient;
+  // O fake anota o último id removido, para o teste conferir qual paciente foi removido
+  lastDeletedId?: number;
+
   constructor(readonly patients: Patient[]) {}
 
   // "Existe?" = algum item da lista tem esse CPF. Ex: [] → false
@@ -67,6 +70,12 @@ class PatientRepositoryFake implements PatientRepository {
   save(patient: Patient): Promise<Patient> {
     this.lastSaved = patient;
     return Promise.resolve(patient);
+  }
+
+  // "Remove" = anota o id recebido (o banco preencheria o deleted_at)
+  softDelete(id: number): Promise<void> {
+    this.lastDeletedId = id;
+    return Promise.resolve();
   }
 }
 
@@ -266,6 +275,44 @@ describe('PatientService', () => {
       expect(erro).toBeInstanceOf(AppException);
       expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
       expect(repository.lastSaved).toBeUndefined(); //com paciente inexistente, o save nem foi chamado
+    });
+  });
+
+  // TESTANDO A REMOÇÃO
+  describe('remove', () => {
+    const data = new Date('2026-10-20T14:03:11.000Z');
+    let repository: PatientRepositoryFake;
+    let service: PatientService;
+
+    beforeEach(() => {
+      repository = new PatientRepositoryFake([
+        {
+          id: 1,
+          name: 'Carlos Pereira',
+          cpf: '12345678901',
+          createdAt: data,
+          updatedAt: data,
+          deletedAt: null,
+        },
+      ]);
+      service = new PatientService(repository);
+    });
+
+    // Paciente que existe: o service manda remover aquele id e não devolve nada (o 204 não tem corpo)
+    it('remove o paciente pelo id e não devolve nada', async () => {
+      const resultado = await service.remove(1);
+
+      expect(resultado).toBeUndefined();
+      expect(repository.lastDeletedId).toBe(1);
+    });
+
+    // Paciente que não existe: a exceção certa, e nada é removido
+    it('lança RECURSO_NAO_ENCONTRADO quando o paciente não existe e não remove nada', async () => {
+      const erro = await service.remove(999).catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
+      expect(repository.lastDeletedId).toBeUndefined();
     });
   });
 });
