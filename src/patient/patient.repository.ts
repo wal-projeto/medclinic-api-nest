@@ -14,4 +14,5 @@ export abstract class PatientRepository {
   abstract create(data: NewPatient): Promise<Patient>; // Promessa: "grave e me devolva o paciente completo"
   abstract findPage(filter: PatientFilter): Promise<PatientPage>; // 	A promessa nova da porta: "me dê esta página"
   abstract findById(id: number): Promise<Patient | null>; // "me dê o paciente deste número, ou null se não houver"
+  abstract save(patient: Patient): Promise<Patient>; // "grave e me devolva o paciente completo"
 }

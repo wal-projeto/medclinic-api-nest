@@ -3,6 +3,7 @@ import { AppException } from '../@common/exceptions/app.exception';
 import { paginate } from '../@common/pagination/paginated';
 import { CreatePatientDto } from './dtos/create-patient.dto';
 import { ListPatientsQueryDto } from './dtos/list-patients-query.dto';
+import { UpdatePatientDto } from './dtos/update-patient.dto';
 import { Patient } from './patient.entity';
 import { PatientRepository } from './patient.repository';
 
@@ -66,5 +67,22 @@ export class PatientService {
       cpf: patient.cpf,
       createdAt: patient.createdAt, // sai como Date. Quando o Nest converte para JSON, ele vira "2026-10-29T14:39:39.762Z", em UTC e com Z.
     };
+  }
+
+  // ALTERA O NOME DO PACIENTE
+  async update(id: number, input: UpdatePatientDto) {
+    // recebe o id (já número) e o DTO (já validado)
+    const patient = await this.patientRepository.findById(id); // O mesmo findById da consulta: removido ou inexistente → null
+
+    if (!patient) {
+      throw new AppException(
+        'RECURSO_NAO_ENCONTRADO',
+        'Paciente não encontrado',
+      );
+    }
+
+    patient.name = input.name; // Troca só o nome; o cpf e as datas ficam como estão
+    const saved = await this.patientRepository.save(patient); // UPDATE no banco
+    return this.toResponse(saved);
   }
 }
