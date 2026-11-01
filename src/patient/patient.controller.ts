@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseIntPipe,
   Patch,
@@ -44,5 +46,12 @@ export class PatientController {
     @Body() body: UpdatePatientDto,
   ) {
     return this.patientService.update(id, body);
+  }
+
+  @Delete(':id') // DELETE /api/v1/patients/:id : só admin; secretary e doctor → 403
+  @RequireRole(['admin'])
+  @HttpCode(204) // sucesso sem corpo (sem isto, o Nest responderia 200)
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.patientService.remove(id);
   }
 }

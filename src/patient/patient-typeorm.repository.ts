@@ -52,6 +52,11 @@ export class PatientTypeormRepository implements PatientRepository {
   save(patient: Patient): Promise<Patient> {
     return this.repository.save(patient); // o Repository do TypeORM grava: com id → SELECT + UPDATE
   }
+
+  //Remoção lógica: não apaga a linha, só preenche o deleted_at com a data e hora atual.
+  async softDelete(id: number): Promise<void> {
+    await this.repository.softDelete(id); // o TypeORM faz o UPDATE ... SET "deleted_at" = CURRENT_TIMESTAMP ... WHERE "id" = $1 AND "deleted_at" IS NULL
+  }
 }
 
 // withDeleted: true? Normalmente o TypeORM esconde as linhas com deletedAt, então

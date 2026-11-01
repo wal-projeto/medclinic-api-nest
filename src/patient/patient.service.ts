@@ -85,4 +85,19 @@ export class PatientService {
     const saved = await this.patientRepository.save(patient); // UPDATE no banco
     return this.toResponse(saved);
   }
+
+  // REMOVE O PACIENTE (remoção lógica)
+  async remove(id: number) {
+    const patient = await this.patientRepository.findById(id); // O mesmo findById: inexistente ou já removido → null
+
+    if (!patient) {
+      // com 999 ou com um já removido: true
+      throw new AppException(
+        'RECURSO_NAO_ENCONTRADO',
+        'Paciente não encontrado',
+      );
+    }
+
+    await this.patientRepository.softDelete(patient.id); // manda a porta marcar como removido, ou seja, preenche o deleted_at; mas a linha continua no banco
+  }
 }
