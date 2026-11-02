@@ -93,6 +93,11 @@ class DoctorRepositoryFake implements DoctorRepository {
       total: found.length,
     });
   }
+
+  // "Busca pelo número" = o médico da lista com esse id, ou null (o mesmo que o banco devolve quando não acha)
+  findById(id: number): Promise<Doctor | null> {
+    return Promise.resolve(this.doctors.find((d) => d.id === id) ?? null);
+  }
 }
 
 describe('DoctorService', () => {
@@ -284,6 +289,56 @@ describe('DoctorService', () => {
         data: [],
         meta: { total: 0, page: 1, pageSize: 20, totalPages: 0 },
       });
+    });
+  });
+
+  // TESTANDO A CONSULTA POR id
+  describe('findById', () => {
+    const data = new Date('2026-11-02T14:00:00.000Z');
+    const helena: Doctor = {
+      // um médico completo, com o usuário (e a senha em hash) dentro, como sai do banco
+      id: 2,
+      crm: 'CRM-SC-10002',
+      user: {
+        id: 12,
+        name: 'Dra. Helena Souza',
+        email: 'helena@clinica.com',
+        password: 'hash-qualquer',
+        roles: ['doctor'],
+        createdAt: data,
+        updatedAt: data,
+      },
+      createdAt: data,
+      updatedAt: data,
+    };
+    const service = new DoctorService(
+      new DoctorRepositoryFake([helena]),
+      new UserRepositoryFake([]),
+      new PasswordService(),
+    );
+
+    // A resposta tem exatamente o formato do cadastro: sem a senha e sem as datas
+    it('devolve o médico no mesmo formato do cadastro', async () => {
+      const resultado = await service.findById(2);
+
+      expect(resultado).toEqual({
+        id: 2,
+        crm: 'CRM-SC-10002',
+        user: {
+          id: 12,
+          name: 'Dra. Helena Souza',
+          email: 'helena@clinica.com',
+          roles: ['doctor'],
+        },
+      });
+    });
+
+    // O caminho de erro: a exceção certa, com o código certo
+    it('lança RECURSO_NAO_ENCONTRADO quando o médico não existe', async () => {
+      const erro = await service.findById(999).catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
     });
   });
 });

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { RequireRole } from '../auth/decorator/require-role.decorator';
 import { CreateDoctorDto } from './dtos/create-doctor.dto';
 import { ListDoctorsQueryDto } from './dtos/list-doctors-query.dto';
@@ -18,5 +26,10 @@ export class DoctorController {
   list(@Query() query: ListDoctorsQueryDto) {
     // @Query() entrega a query string validada como ListDoctorsQueryDto
     return this.doctorService.list(query);
+  }
+
+  @Get(':id') // GET /api/v1/doctors/:id : sem @RequireRole; pega o :id e passa pelo pipe : "2" -> 2 ; "abc" -> 400
+  findById(@Param('id', ParseIntPipe) id: number) {
+    return this.doctorService.findById(id);
   }
 }
