@@ -5,9 +5,10 @@ import { DataSource } from 'typeorm';
 import { APIEnv, DbLogLevel } from '../../env';
 import { User } from '../../user/user.entity';
 import { Patient } from '../../patient/patient.entity';
+import { Doctor } from '../../doctor/doctor.entity';
 import { SnakeCaseNamingStrategy } from './snake-case-naming-pattern';
 
-export const ENTITIES = [User, Patient];
+export const ENTITIES = [User, Patient, Doctor];
 
 export const databaseProvider: FactoryProvider = {
   provide: DataSource,
