@@ -9,7 +9,8 @@ import { AuthModule } from './auth/auth.module';
 import { JwtGuard } from './auth/jwt.guard';
 import { UserModule } from './user/user.module';
 import { AppValidationPipe } from './@common/pipes/app-validation.pipe';
-import { PatientModule } from './patient/patient.module'; // traz o módulo novo
+import { PatientModule } from './patient/patient.module';
+import { DoctorModule } from './doctor/doctor.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PatientModule } from './patient/patient.module'; // traz o módulo novo
     AuthModule,
     UserModule,
     PatientModule, // A aplicaçõa passa a carregar o módulo de paciente. Com isso a rota passa a existir e a API responde 201 para criar Patient
+    DoctorModule, // A aplicaçõa passa a carregar o módulo de médico. Com isso a rota passa a existir e a API responde 201 para criar Doctor
   ],
   controllers: [HealthController],
   providers: [
