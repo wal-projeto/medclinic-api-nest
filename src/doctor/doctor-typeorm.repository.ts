@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ILike, Repository } from 'typeorm';
 import { User } from '../user/user.entity';
+import { MAX_INTEGER } from '../@common/database/postgres-limits';
 import { Doctor } from './doctor.entity';
 import {
   DoctorFilter,
@@ -45,5 +46,16 @@ export class DoctorTypeormRepository implements DoctorRepository {
       take,
     });
     return { doctors, total }; // Devolve no formato da porta	{ doctors: [...], total: 2 }
+  }
+
+  // BUSCA UM MÉDICO PELO id (com o usuário junto) - recebe o id já como número
+  findById(id: number): Promise<Doctor | null> {
+    if (id < 1 || id > MAX_INTEGER) {
+      return Promise.resolve(null); // 0, -1, 99999999999 -> null sem consultar o banco - 404
+    }
+    return this.repository.findOne({
+      where: { id },
+      relations: { user: true }, // traz o usuário junto (JOIN): o nome e o e-mail do médico estão na tabela user
+    });
   }
 }

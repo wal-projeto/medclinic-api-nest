@@ -59,6 +59,16 @@ export class DoctorService {
     );
   }
 
+  // CONSULTA UM MÉDICO PELO id
+  async findById(id: number) {
+    const doctor = await this.doctorRepository.findById(id); // Pergunta à porta DoctorRepository : doctor = Helena, ou null
+
+    if (!doctor) {
+      throw new AppException('RECURSO_NAO_ENCONTRADO', 'Médico não encontrado');
+    }
+    return this.toResponse(doctor);
+  }
+
   // Monta a resposta do contrato: { id, crm, user: { id, name, email, roles } }. A senha (hash) e as datas ficam de fora
   private toResponse(doctor: Doctor) {
     return {
