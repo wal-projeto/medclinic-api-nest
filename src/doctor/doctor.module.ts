@@ -9,10 +9,18 @@ import {
 } from './doctor-typeorm.repository';
 import { DoctorController } from './doctor.controller';
 import { DoctorService } from './doctor.service';
+import { WorkScheduleController } from './work-schedule.controller';
+import { WorkScheduleRepository } from './work-schedule.repository';
+import {
+  TYPEORM_WORK_SHIFT_REPOSITORY,
+  WorkScheduleTypeormRepository,
+} from './work-schedule-typeorm.repository';
+import { WorkScheduleService } from './work-schedule.service';
+import { WorkShift } from './work-shift.entity';
 
 @Module({
   imports: [UserModule], // traz o UserRepository (o UserModule o exporta), que o DoctorService usa para conferir o e-mail
-  controllers: [DoctorController],
+  controllers: [DoctorController, WorkScheduleController],
   providers: [
     // quando alguém pedir um DoctorRepository, entregue um DoctorTypeormRepository
     { provide: DoctorRepository, useClass: DoctorTypeormRepository },
@@ -25,6 +33,19 @@ import { DoctorService } from './doctor.service';
       inject: [DataSource],
     },
     DoctorService,
+    // a escala: a porta, o adaptador, o Repository<WorkShift> do TypeORM e o service
+    {
+      provide: WorkScheduleRepository, //quem pedir a porta WorkScheduleRepository recebe o adaptador do TypeORM
+      useClass: WorkScheduleTypeormRepository,
+    },
+    {
+      provide: TYPEORM_WORK_SHIFT_REPOSITORY, // fabrica o Repository<WorkShift> a partir da conexão e guarda com a etiqueta
+      useFactory(dataSource: DataSource) {
+        return dataSource.getRepository(WorkShift);
+      },
+      inject: [DataSource],
+    },
+    WorkScheduleService,
   ],
 })
 export class DoctorModule {}
