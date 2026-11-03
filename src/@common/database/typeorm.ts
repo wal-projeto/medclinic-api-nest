@@ -1,14 +1,14 @@
 import { FactoryProvider } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
-
 import { APIEnv, DbLogLevel } from '../../env';
 import { User } from '../../user/user.entity';
 import { Patient } from '../../patient/patient.entity';
 import { Doctor } from '../../doctor/doctor.entity';
+import { WorkShift } from '../../doctor/work-shift.entity';
 import { SnakeCaseNamingStrategy } from './snake-case-naming-pattern';
 
-export const ENTITIES = [User, Patient, Doctor];
+export const ENTITIES = [User, Patient, Doctor, WorkShift];
 
 export const databaseProvider: FactoryProvider = {
   provide: DataSource,
