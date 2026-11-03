@@ -15,7 +15,6 @@ class DoctorRepositoryFake implements DoctorRepository {
   constructor(readonly doctors: Doctor[]) {}
 
   findById(id: number): Promise<Doctor | null> {
-    // <-- só o findById é usado pelo service; os outros métodos existem porque o implements obriga
     return Promise.resolve(this.doctors.find((d) => d.id === id) ?? null);
   }
 
@@ -32,10 +31,15 @@ class DoctorRepositoryFake implements DoctorRepository {
   }
 }
 
-// FAKE DA ESCALA: anota o que o service mandou gravar e devolve os turnos com id (e a hora com segundos, como o banco devolve ao ler)
+// FAKE DA ESCALA: guarda os turnos que já "estão no banco" (stored), anota o que o service
+// mandou gravar e devolve os turnos com id (e a hora com segundos, como o banco devolve ao ler)
 class WorkScheduleRepositoryFake implements WorkScheduleRepository {
   lastDoctorId?: number;
   lastShifts?: NewWorkShift[];
+  lookups = 0; // quantas vezes o service pediu a escala de um médico (findByDoctorId)
+
+  // os turnos que "já estão no banco": o fake começa com eles (ou vazio, se eu não passar nada)
+  constructor(readonly stored: WorkShift[] = []) {}
 
   replaceForDoctor(
     doctorId: number,
@@ -54,26 +58,36 @@ class WorkScheduleRepositoryFake implements WorkScheduleRepository {
       })),
     );
   }
+
+  findByDoctorId(doctorId: number): Promise<WorkShift[]> {
+    // devolve só os turnos do médico pedido
+    this.lookups++;
+    return Promise.resolve(this.stored.filter((s) => s.doctorId === doctorId));
+  }
 }
 
+//prova, sem banco e sem rede, que o WorkScheduleService devolve a escala no formato certo,
+// devolve lista vazia quando não há escala e lança o 404 quando o médico não existe.
+// Usa repositórios de mentira (fakes), em memória.
 describe('WorkScheduleService', () => {
-  describe('replace', () => {
-    const agora = new Date('2026-11-02T20:00:00.000Z');
-    const helena: Doctor = {
-      id: 2,
-      crm: 'CRM-SC-10002',
-      user: {
-        id: 12,
-        name: 'Dra. Helena Souza',
-        email: 'helena@clinica.com',
-        password: 'hash-qualquer',
-        roles: ['doctor'],
-        createdAt: agora,
-        updatedAt: agora,
-      },
+  const agora = new Date('2026-11-02T20:00:00.000Z');
+  const helena: Doctor = {
+    id: 2,
+    crm: 'CRM-SC-10002',
+    user: {
+      id: 12,
+      name: 'Dra. Helena Souza',
+      email: 'helena@clinica.com',
+      password: 'hash-qualquer',
+      roles: ['doctor'],
       createdAt: agora,
       updatedAt: agora,
-    };
+    },
+    createdAt: agora,
+    updatedAt: agora,
+  };
+
+  describe('replace', () => {
     // Um turno de terça (2), com a duração de 30 minutos
     const terca = (startTime: string, endTime: string, slot = 30) => ({
       weekDay: 2,
@@ -190,6 +204,92 @@ describe('WorkScheduleService', () => {
       expect(erro).toBeInstanceOf(AppException);
       expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
       expect(repository.lastShifts).toBeUndefined();
+    });
+  });
+
+  // CONSULTA A ESCALA DO MÉDICO. Médico sem escala é 200 com { shifts: [] }; médico que não existe é 404
+  describe('findByDoctorId', () => {
+    // Monta três turnos(doBanco) como o banco devolveria: com id, doctorId e a hora com segundos "08:00:00"
+    const turno = (
+      id: number,
+      weekDay: number,
+      startTime: string,
+      endTime: string,
+      slotDurationMinutes: number,
+    ): WorkShift => ({
+      id,
+      doctorId: 2,
+      weekDay,
+      startTime,
+      endTime,
+      slotDurationMinutes,
+      doctor: undefined as unknown as Doctor,
+    });
+    const doBanco = [
+      turno(1, 2, '08:00:00', '12:00:00', 30),
+      turno(2, 2, '14:00:00', '18:00:00', 20),
+      turno(3, 4, '08:00:00', '11:00:00', 30),
+    ];
+
+    // 1º TESTE: Devolve só os 4 campos de cada turno (sem id e sem doctorId) e a hora cortada para HH:MM
+    it('devolve os turnos do médico só com os quatro campos e a hora em HH:MM', async () => {
+      const service = new WorkScheduleService(
+        new DoctorRepositoryFake([helena]),
+        new WorkScheduleRepositoryFake(doBanco),
+      );
+
+      const resultado = await service.findByDoctorId(2);
+
+      expect(resultado).toEqual({
+        // o resultado tem só weekDay, startTime, endTime e slotDurationMinutes, com 08:00 (e não 08:00:00)
+        shifts: [
+          {
+            weekDay: 2,
+            startTime: '08:00',
+            endTime: '12:00',
+            slotDurationMinutes: 30,
+          },
+          {
+            weekDay: 2,
+            startTime: '14:00',
+            endTime: '18:00',
+            slotDurationMinutes: 20,
+          },
+          {
+            weekDay: 4,
+            startTime: '08:00',
+            endTime: '11:00',
+            slotDurationMinutes: 30,
+          },
+        ],
+      });
+    });
+
+    // 2º TESTE: Médico que existe mas ainda não tem escala: 200 com a lista vazia, e não 404
+    it('devolve { shifts: [] } quando o médico existe e não tem escala', async () => {
+      const service = new WorkScheduleService(
+        new DoctorRepositoryFake([helena]),
+        new WorkScheduleRepositoryFake([]),
+      );
+
+      const resultado = await service.findByDoctorId(2);
+
+      expect(resultado).toEqual({ shifts: [] }); // médico 2 existe mas o fake não tem turnos: resultado { shifts: [] } e nenhum erro
+    });
+
+    // 3º TESTE: Médico que não existe: 404, e a escala nem é consultada
+    it('lança RECURSO_NAO_ENCONTRADO quando o médico não existe e não consulta a escala', async () => {
+      const repository = new WorkScheduleRepositoryFake(doBanco);
+      const service = new WorkScheduleService(
+        new DoctorRepositoryFake([helena]),
+        repository,
+      );
+
+      const erro = await service.findByDoctorId(999).catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO'); // médico 999 não existe: lança AppException com RECURSO_NAO_ENCONTRADO,
+      expect(repository.lookups).toBe(0); // e lookups continua em 0 (a escala nem foi consultada)
     });
   });
 });
