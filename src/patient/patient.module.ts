@@ -25,5 +25,6 @@ import { PatientService } from './patient.service';
     },
     PatientService, // registra o service
   ],
+  exports: [PatientRepository], // outros módulos (as consultas) usam esta porta
 })
 export class PatientModule {}
