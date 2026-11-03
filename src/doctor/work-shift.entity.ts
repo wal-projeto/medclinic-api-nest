@@ -1,4 +1,4 @@
-// Responsabilidade: descreve a tabela work_shift (um turno de um médico: dia, hora de 
+// Responsabilidade: descreve a tabela work_shift (um turno de um médico: dia, hora de
 // início, hora de fim e duração da consulta) e as regras que o próprio banco confere em toda gravação.
 
 import {
@@ -34,7 +34,7 @@ export class WorkShift {
   weekDay: number;
 
   // Hora de relógio da clínica, sem data e sem fuso (tipo time do PostgreSQL). Volta do banco como "08:00:00"
-  @Column('time') 
+  @Column('time')
   startTime: string;
 
   @Column('time') // só a hora do relógio, sem data e sem fuso
