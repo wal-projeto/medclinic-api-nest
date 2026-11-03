@@ -37,4 +37,13 @@ export class WorkScheduleTypeormRepository implements WorkScheduleRepository {
       );
     });
   }
+
+  // SELECT ... FROM work_shift WHERE doctor_id = 2 ORDER BY week_day ASC, start_time ASC
+  // A ordem vem do banco: domingo (0) a sábado (6) e, no mesmo dia, do turno mais cedo para o mais tarde
+  findByDoctorId(doctorId: number): Promise<WorkShift[]> {
+    return this.repository.find({
+      where: { doctorId },
+      order: { weekDay: 'ASC', startTime: 'ASC' },
+    });
+  }
 }

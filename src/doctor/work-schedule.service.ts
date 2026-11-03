@@ -1,5 +1,5 @@
-// Responsabilidade: guarda as regras da escala: cada turno começa antes de
-// terminar, turnos do mesmo dia não se sobrepõem, o médico precisa existir.
+//Responsabilidade: guarda as regras da escala: cada turno começa antes de terminar, turnos do mesmo dia não se sobrepõem.
+// aqui: "o médico precisa existir"
 // Monta a resposta do contrato. Não sabe nada de banco nem de HTTP.
 
 import { Injectable } from '@nestjs/common';
@@ -18,7 +18,7 @@ export class WorkScheduleService {
 
   // SUBSTITUI A ESCALA INTEIRA DO MÉDICO
   async replace(doctorId: number, input: SetWorkScheduleDto) {
-    this.validateShifts(input.shifts); // regras que o formato sozinho não pega (RN05); lança 400 antes de ir ao banco
+    this.validateShifts(input.shifts); // regras que o formato sozinho não pega; lança 400 antes de ir ao banco
 
     // pergunta à porta do médico se ele existe. null → 404
     if (!(await this.doctorRepository.findById(doctorId))) {
@@ -34,11 +34,23 @@ export class WorkScheduleService {
     return { shifts: saved.map((shift) => this.toResponse(shift)) };
   }
 
+  // CONSULTA A ESCALA DO MÉDICO. Médico sem escala é 200 com { shifts: [] }; médico que não existe é 404
+  async findByDoctorId(doctorId: number) {
+    if (!(await this.doctorRepository.findById(doctorId))) {
+      // pergunta à porta do médico se ele existe. null → 404
+      throw new AppException('RECURSO_NAO_ENCONTRADO', 'Médico não encontrado');
+    }
+
+    const shifts = await this.workScheduleRepository.findByDoctorId(doctorId); // pergunta à "porta da escala" quantos turnos esse médico tem.
+    return { shifts: shifts.map((shift) => this.toResponse(shift)) }; // passa cada turno pelo toResponse. Médico sem escala é 200 com { shifts: [] }; médico que não existe é 404(AppException)
+  }
+
   // Duas regras: cada turno começa antes de terminar, e dois turnos do mesmo dia não se sobrepõem
   private validateShifts(shifts: SetWorkScheduleDto['shifts']) {
     for (const shift of shifts) {
-      // início maior ou igual ao fim é 400. A comparação como texto vale porque o DTO garante HH:MM
+      // início maior ou igual ao fim é 400. A comparação como texto vale porque o DTO garante HH:MM.
       if (shift.startTime >= shift.endTime) {
+        // 12:00 >= 12:00 → true. 14:00 >= 12:00 → true. 08:00 >= 12:00 → false
         throw new AppException(
           'DADOS_INVALIDOS',
           'startTime must be before endTime',
