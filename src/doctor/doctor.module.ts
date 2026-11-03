@@ -47,5 +47,6 @@ import { WorkShift } from './work-shift.entity';
     },
     WorkScheduleService,
   ],
+  exports: [DoctorRepository, WorkScheduleRepository], // outros módulos (as consultas) usam estas duas portas
 })
 export class DoctorModule {}

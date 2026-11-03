@@ -6,9 +6,10 @@ import { User } from '../../user/user.entity';
 import { Patient } from '../../patient/patient.entity';
 import { Doctor } from '../../doctor/doctor.entity';
 import { WorkShift } from '../../doctor/work-shift.entity';
+import { Appointment } from '../../appointment/appointment.entity';
 import { SnakeCaseNamingStrategy } from './snake-case-naming-pattern';
 
-export const ENTITIES = [User, Patient, Doctor, WorkShift];
+export const ENTITIES = [User, Patient, Doctor, WorkShift, Appointment];
 
 export const databaseProvider: FactoryProvider = {
   provide: DataSource,
