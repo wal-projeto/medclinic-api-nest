@@ -8,9 +8,6 @@ import { AppointmentRepository } from './appointment.repository';
 import { AppointmentRulesService } from './appointment-rules.service';
 import { CreateAppointmentDto } from './dtos/create-appointment.dto';
 
-// Nenhuma consulta dura mais de 1440 minutos (um dia): quem se sobrepõe a uma consulta nova começou, no máximo, um dia antes dela
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 @Injectable()
 export class AppointmentService {
   constructor(
@@ -42,43 +39,32 @@ export class AppointmentService {
     );
     const endsAt = this.rules.resolveEndsAt(shifts, startsAt);
     const period = { startsAt, endsAt };
-    const from = new Date(startsAt.getTime() - DAY_MS);
 
-    // 5) o médico está livre no período (409)
-    const doctorAppointments =
-      await this.appointmentRepository.findActiveByDoctor(
-        input.doctorId,
-        from,
+    // 5 e 6) a transação com a linha do médico travada: o repositório trava, busca as consultas ativas do médico e do paciente
+    // e chama esta regra, que lança o 409 se alguma se sobrepõe; só se passar, ele grava. O médico vem antes do paciente
+    const saved = await this.appointmentRepository.createWithLock(
+      {
+        doctorId: input.doctorId,
+        patientId: input.patientId,
+        startsAt,
         endsAt,
-      );
-    if (this.rules.hasOverlap(doctorAppointments, period)) {
-      throw new AppException(
-        'HORARIO_INDISPONIVEL',
-        'O médico já tem uma consulta nesse horário',
-      );
-    }
-
-    // 6) o paciente está livre no período, ainda que com outro médico (409)
-    const patientAppointments =
-      await this.appointmentRepository.findActiveByPatient(
-        input.patientId,
-        from,
-        endsAt,
-      );
-    if (this.rules.hasOverlap(patientAppointments, period)) {
-      throw new AppException(
-        'PACIENTE_INDISPONIVEL',
-        'O paciente já tem uma consulta nesse horário',
-      );
-    }
-
-    const saved = await this.appointmentRepository.create({
-      doctorId: input.doctorId,
-      patientId: input.patientId,
-      startsAt,
-      endsAt,
-      status: 'scheduled', // toda consulta nasce agendada
-    });
+        status: 'scheduled', // toda consulta nasce agendada
+      },
+      (doctorAppointments, patientAppointments) => {
+        if (this.rules.hasOverlap(doctorAppointments, period)) {
+          throw new AppException(
+            'HORARIO_INDISPONIVEL',
+            'O médico já tem uma consulta nesse horário',
+          );
+        }
+        if (this.rules.hasOverlap(patientAppointments, period)) {
+          throw new AppException(
+            'PACIENTE_INDISPONIVEL',
+            'O paciente já tem uma consulta nesse horário',
+          );
+        }
+      },
+    );
     return this.toResponse(saved);
   }
 

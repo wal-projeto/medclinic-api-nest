@@ -12,6 +12,8 @@ import { PatientPage, PatientRepository } from '../patient/patient.repository';
 import { Appointment } from './appointment.entity';
 import {
   AppointmentRepository,
+  AssertFree,
+  LOOKBACK_MS,
   NewAppointment,
 } from './appointment.repository';
 import { AppointmentRulesService } from './appointment-rules.service';
@@ -86,38 +88,35 @@ class WorkScheduleRepositoryFake implements WorkScheduleRepository {
   }
 }
 
-// FAKE DAS CONSULTAS: guarda as que "já estão no banco" (stored), devolve as ativas do médico ou do paciente
-// que COMEÇAM em [from, to) e anota a consulta que o service mandou gravar (created)
+// FAKE DAS CONSULTAS: guarda as que "já estão no banco" (stored). No createWithLock faz o que o adaptador faz (separa as ativas
+// do médico e do paciente que COMEÇAM entre um dia antes do início e o fim da nova), chama a regra de conflito do service
+// e, só se ela não lançar, anota a consulta que o service mandou gravar (created)
 class AppointmentRepositoryFake implements AppointmentRepository {
   created?: NewAppointment;
+  locks = 0; // quantas vezes o service pediu a gravação com a trava (uma por consulta que chegou até a transação)
 
   constructor(readonly stored: Appointment[] = []) {}
 
-  findActiveByDoctor(doctorId: number, from: Date, to: Date) {
-    return Promise.resolve(
-      this.stored.filter(
-        (a) =>
-          a.doctorId === doctorId &&
-          a.status !== 'cancelled' &&
-          a.startsAt >= from &&
-          a.startsAt < to,
-      ),
+  createWithLock(
+    data: NewAppointment,
+    assertFree: AssertFree,
+  ): Promise<Appointment> {
+    this.locks++;
+    const from = new Date(data.startsAt.getTime() - LOOKBACK_MS);
+    const candidates = this.stored.filter(
+      (a) =>
+        a.status !== 'cancelled' &&
+        a.startsAt >= from &&
+        a.startsAt < data.endsAt,
     );
-  }
-
-  findActiveByPatient(patientId: number, from: Date, to: Date) {
-    return Promise.resolve(
-      this.stored.filter(
-        (a) =>
-          a.patientId === patientId &&
-          a.status !== 'cancelled' &&
-          a.startsAt >= from &&
-          a.startsAt < to,
-      ),
-    );
-  }
-
-  create(data: NewAppointment): Promise<Appointment> {
+    try {
+      assertFree(
+        candidates.filter((a) => a.doctorId === data.doctorId),
+        candidates.filter((a) => a.patientId === data.patientId),
+      );
+    } catch (err) {
+      return Promise.reject(err as Error);
+    }
     this.created = data;
     return Promise.resolve({
       ...data,
@@ -232,6 +231,7 @@ describe('AppointmentService', () => {
       endsAt: new Date('2026-10-13T11:30:00.000Z'),
       status: 'scheduled',
     });
+    expect(appointments.locks).toBe(1); // uma gravação, uma transação
   });
 
   // 1) Médico ou paciente que não existe: 404, e nada é gravado
@@ -244,6 +244,7 @@ describe('AppointmentService', () => {
     expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
     expect(erro.message).toBe('Médico não encontrado');
     expect(appointments.created).toBeUndefined();
+    expect(appointments.locks).toBe(0); // a transação nem foi aberta
   });
 
   it('lança RECURSO_NAO_ENCONTRADO quando o paciente não existe e não consulta a escala', async () => {
@@ -256,6 +257,7 @@ describe('AppointmentService', () => {
     expect(erro.message).toBe('Paciente não encontrado');
     expect(schedule.lookups).toBe(0);
     expect(appointments.created).toBeUndefined();
+    expect(appointments.locks).toBe(0);
   });
 
   // 2, 3 e 4) Horário que não existe na agenda do médico: 422, e nada é gravado. O trecho da mensagem mostra qual das três regras falhou
@@ -280,6 +282,7 @@ describe('AppointmentService', () => {
       expect(erro.errorCode).toBe('HORARIO_FORA_DA_ESCALA');
       expect(erro.message).toContain(trecho);
       expect(appointments.created).toBeUndefined();
+      expect(appointments.locks).toBe(0); // horário que não existe na escala não chega a travar o médico
     },
   );
 
@@ -296,6 +299,7 @@ describe('AppointmentService', () => {
     expect(erro).toBeInstanceOf(AppException);
     expect(erro.errorCode).toBe('HORARIO_INDISPONIVEL');
     expect(appointments.created).toBeUndefined();
+    expect(appointments.locks).toBe(1); // o conflito é descoberto DENTRO da transação, com o médico travado
   });
 
   // O início é diferente, mas há sobreposição: a consulta antiga (de uma escala antiga) dura 60 min e vai até 09:00 (12:00Z)

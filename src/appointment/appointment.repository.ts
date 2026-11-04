@@ -7,23 +7,24 @@ export type NewAppointment = Pick<
   'doctorId' | 'patientId' | 'startsAt' | 'endsAt' | 'status'
 >;
 
+// Nenhuma consulta dura mais de 1440 minutos (um dia): quem se sobrepõe a uma consulta nova começou, no máximo, um dia antes dela
+export const LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+// A regra de conflito que o service entrega ao repositório: recebe as consultas ativas do médico e do paciente
+// que podem se sobrepor à nova e LANÇA um AppException se alguma se sobrepõe
+export type AssertFree = (
+  doctorAppointments: Appointment[],
+  patientAppointments: Appointment[],
+) => void;
+
 // PORTA
 @Injectable()
 export abstract class AppointmentRepository {
-  // "as consultas deste médico que não foram canceladas e que COMEÇAM de from (inclusive) até to (exclusive)"
-  abstract findActiveByDoctor(
-    doctorId: number,
-    from: Date,
-    to: Date,
-  ): Promise<Appointment[]>;
-
-  // o mesmo, para o paciente
-  abstract findActiveByPatient(
-    patientId: number,
-    from: Date,
-    to: Date,
-  ): Promise<Appointment[]>;
-
-  // "grave esta consulta e me devolva ela completa, com o id"
-  abstract create(data: NewAppointment): Promise<Appointment>;
+  // "grave esta consulta, mas só depois de conferir os conflitos COM O MÉDICO TRAVADO": numa transação, trava a linha do médico
+  // (quem chegar depois espera), busca as consultas ativas do médico e do paciente que COMEÇAM de um dia antes do início
+  // até o fim da nova, chama assertFree (que lança se há conflito) e só então grava, devolvendo a consulta completa, com o id
+  abstract createWithLock(
+    data: NewAppointment,
+    assertFree: AssertFree,
+  ): Promise<Appointment>;
 }
