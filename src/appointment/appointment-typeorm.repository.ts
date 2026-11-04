@@ -1,8 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { And, LessThan, MoreThanOrEqual, Not, Repository } from 'typeorm';
+import {
+  And,
+  FindOptionsWhere,
+  LessThan,
+  MoreThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
+import { Doctor } from '../doctor/doctor.entity';
 import { Appointment } from './appointment.entity';
 import {
   AppointmentRepository,
+  AssertFree,
+  LOOKBACK_MS,
   NewAppointment,
 } from './appointment.repository';
 
@@ -17,38 +27,39 @@ export class AppointmentTypeormRepository implements AppointmentRepository {
     private readonly repository: Repository<Appointment>,
   ) {}
 
-  // SELECT ... FROM appointment WHERE doctor_id = 2 AND status <> 'cancelled' AND starts_at >= from AND starts_at < to
-  findActiveByDoctor(
-    doctorId: number,
-    from: Date,
-    to: Date,
-  ): Promise<Appointment[]> {
-    return this.repository.find({
-      where: {
-        doctorId,
+  // TUDO NA MESMA TRANSAÇÃO, com a linha do médico travada: BEGIN, SELECT ... FOR UPDATE (médico), as duas buscas, o INSERT e COMMIT.
+  // Se assertFree lançar, o ROLLBACK desfaz e o erro sobe; a trava é solta no COMMIT ou no ROLLBACK
+  createWithLock(
+    data: NewAppointment,
+    assertFree: AssertFree,
+  ): Promise<Appointment> {
+    return this.repository.manager.transaction(async (manager) => {
+      // 1º comando: SELECT ... FROM doctor WHERE id = $1 FOR UPDATE. Quem chegar depois, para o MESMO médico, espera aqui
+      await manager.findOne(Doctor, {
+        where: { id: data.doctorId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      // as consultas ativas que COMEÇAM em [um dia antes do início, fim da nova): o fim fica de fora
+      const window: FindOptionsWhere<Appointment> = {
         status: Not('cancelled'), // consulta cancelada não ocupa o horário
-        startsAt: And(MoreThanOrEqual(from), LessThan(to)), // [from, to): o fim fica de fora
-      },
-    });
-  }
+        startsAt: And(
+          MoreThanOrEqual(new Date(data.startsAt.getTime() - LOOKBACK_MS)),
+          LessThan(data.endsAt),
+        ),
+      };
+      // ATENÇÃO: tudo aqui dentro usa o manager DA TRANSAÇÃO (e não this.repository, que rodaria fora dela)
+      const doctorAppointments = await manager.find(Appointment, {
+        where: { ...window, doctorId: data.doctorId },
+      });
+      const patientAppointments = await manager.find(Appointment, {
+        where: { ...window, patientId: data.patientId },
+      });
 
-  // o mesmo, pelo paciente
-  findActiveByPatient(
-    patientId: number,
-    from: Date,
-    to: Date,
-  ): Promise<Appointment[]> {
-    return this.repository.find({
-      where: {
-        patientId,
-        status: Not('cancelled'),
-        startsAt: And(MoreThanOrEqual(from), LessThan(to)),
-      },
-    });
-  }
+      assertFree(doctorAppointments, patientAppointments); // lança 409 se alguma se sobrepõe
 
-  // INSERT INTO appointment (...) VALUES (...) RETURNING id, created_at, updated_at
-  create(data: NewAppointment): Promise<Appointment> {
-    return this.repository.save(this.repository.create(data));
+      // INSERT INTO appointment (...) VALUES (...) RETURNING id, created_at, updated_at
+      return manager.save(manager.create(Appointment, data));
+    });
   }
 }
