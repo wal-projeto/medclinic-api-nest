@@ -62,4 +62,21 @@ export class AppointmentTypeormRepository implements AppointmentRepository {
       return manager.save(manager.create(Appointment, data));
     });
   }
+
+  // SELECT ... WHERE doctor_id = $1 AND status <> 'cancelled' AND starts_at >= $2 AND starts_at < $3 ORDER BY starts_at, id.
+  // Não precisa de transação: é só leitura
+  findActiveByDoctorInPeriod(
+    doctorId: number,
+    from: Date,
+    to: Date,
+  ): Promise<Appointment[]> {
+    return this.repository.find({
+      where: {
+        doctorId,
+        status: Not('cancelled'), // consulta cancelada não ocupa o horário (não aparece na agenda)
+        startsAt: And(MoreThanOrEqual(from), LessThan(to)), // o dia seguinte à meia-noite fica de fora
+      },
+      order: { startsAt: 'ASC', id: 'ASC' }, // a mais cedo primeiro; no empate, a mais antiga
+    });
+  }
 }

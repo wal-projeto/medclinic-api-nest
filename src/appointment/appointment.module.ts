@@ -4,6 +4,8 @@ import { DoctorModule } from '../doctor/doctor.module';
 import { PatientModule } from '../patient/patient.module';
 import { Appointment } from './appointment.entity';
 import { AppointmentController } from './appointment.controller';
+import { CalendarController } from './calendar.controller';
+import { CalendarService } from './calendar.service';
 import { AppointmentRepository } from './appointment.repository';
 import {
   AppointmentTypeormRepository,
@@ -13,8 +15,8 @@ import { AppointmentRulesService } from './appointment-rules.service';
 import { AppointmentService } from './appointment.service';
 
 @Module({
-  imports: [DoctorModule, PatientModule], // trazem as portas DoctorRepository, WorkScheduleRepository e PatientRepository (cada módulo as exporta)
-  controllers: [AppointmentController],
+  imports: [DoctorModule, PatientModule], // trazem as portas DoctorRepository, WorkScheduleRepository e PatientRepository, e o WorkScheduleService (cada módulo os exporta)
+  controllers: [AppointmentController, CalendarController],
   providers: [
     // quando alguém pedir um AppointmentRepository, entregue um AppointmentTypeormRepository
     { provide: AppointmentRepository, useClass: AppointmentTypeormRepository },
@@ -28,6 +30,7 @@ import { AppointmentService } from './appointment.service';
     },
     AppointmentRulesService,
     AppointmentService,
+    CalendarService,
   ],
 })
 export class AppointmentModule {}
