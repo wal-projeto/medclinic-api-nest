@@ -127,6 +127,10 @@ class AppointmentRepositoryFake implements AppointmentRepository {
       updatedAt: new Date(),
     });
   }
+
+  findActiveByDoctorInPeriod(): Promise<Appointment[]> {
+    return Promise.reject(new Error('não usado'));
+  }
 }
 
 describe('AppointmentService', () => {

@@ -14,6 +14,8 @@ const WEEK_DAYS: Record<string, number> = {
   Sat: 6,
 };
 const MINUTE_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+const MAX_CALENDAR_DAYS = 31; // o período da agenda tem no máximo 31 dias (contando o primeiro e o último)
 
 // Um período de uma consulta: o que importa para a sobreposição
 export type Period = { startsAt: Date; endsAt: Date };
@@ -61,6 +63,29 @@ export class AppointmentRulesService {
     return new Date(startsAt.getTime() + shift.slotDurationMinutes * MINUTE_MS);
   }
 
+  // O período da agenda: "2026-10-12" até "2026-10-16" são cinco DIAS INTEIROS no relógio da clínica. Devolve de qual instante (meia-noite de from)
+  // até qual instante (meia-noite do dia seguinte a to, que fica de fora). 400 se from é depois de to ou se passa de 31 dias
+  resolveCalendarPeriod(from: string, to: string): Period {
+    const fromDay = Date.parse(`${from}T00:00:00Z`); // só para contar dias: o dia civil como instante UTC
+    const toDay = Date.parse(`${to}T00:00:00Z`);
+
+    if (fromDay > toDay) {
+      throw new AppException('DADOS_INVALIDOS', 'from must not be after to');
+    }
+    // dias contados com as duas pontas: de 2026-10-01 a 2026-10-31 são 31 dias
+    if ((toDay - fromDay) / DAY_MS + 1 > MAX_CALENDAR_DAYS) {
+      throw new AppException(
+        'DADOS_INVALIDOS',
+        `the period must not exceed ${MAX_CALENDAR_DAYS} days`,
+      );
+    }
+
+    return {
+      startsAt: this.toClinicMidnight(fromDay),
+      endsAt: this.toClinicMidnight(toDay + DAY_MS),
+    };
+  }
+
   // Há sobreposição quando uma começa antes de a outra terminar E a outra começa antes de a primeira terminar.
   // A comparação é estrita (<): períodos encostados (10:00-10:30 e 10:30-11:00) NÃO conflitam
   hasOverlap(existing: Period[], period: Period): boolean {
@@ -85,6 +110,33 @@ export class AppointmentRulesService {
       weekDay: WEEK_DAYS[get('weekday')],
       minutes: Number(get('hour')) * 60 + Number(get('minute')),
     };
+  }
+
+  // O instante em que um dia civil (dado como meia-noite UTC) começa NO RELÓGIO DA CLÍNICA. Em São Paulo (UTC-3), o dia 13 começa às 03:00 UTC.
+  // Lê que horas são na clínica naquele instante UTC (21:00 do dia anterior) e desconta a diferença
+  private toClinicMidnight(utcMidnight: number): Date {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: CLINIC_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date(utcMidnight));
+    const get = (type: string) =>
+      Number(parts.find((p) => p.type === type)!.value);
+    const clinicClockAsUtc = Date.UTC(
+      get('year'),
+      get('month') - 1,
+      get('day'),
+      get('hour'),
+      get('minute'),
+      get('second'),
+    );
+    const offset = clinicClockAsUtc - utcMidnight; // -3 horas em milissegundos
+    return new Date(utcMidnight - offset);
   }
 
   // "08:30" ou "08:30:00" (como o banco devolve) → 510

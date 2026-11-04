@@ -27,4 +27,12 @@ export abstract class AppointmentRepository {
     data: NewAppointment,
     assertFree: AssertFree,
   ): Promise<Appointment>;
+
+  // "as consultas ATIVAS (não canceladas) deste médico que COMEÇAM de from (incluído) até to (excluído), da mais cedo para a mais tarde"
+  // (sem consultas devolve [ ] e não null nem erro). Serve à agenda do médico: o período já vem como dois instantes
+  abstract findActiveByDoctorInPeriod(
+    doctorId: number,
+    from: Date,
+    to: Date,
+  ): Promise<Appointment[]>;
 }

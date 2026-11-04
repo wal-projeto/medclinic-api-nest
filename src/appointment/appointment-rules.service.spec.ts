@@ -229,4 +229,58 @@ describe('AppointmentRulesService', () => {
       ).toBe(true);
     });
   });
+
+  describe('resolveCalendarPeriod', () => {
+    // Um dia só: de 2026-10-13 a 2026-10-13 é o dia 13 inteiro no relógio de São Paulo: das 03:00 UTC do dia 13 às 03:00 UTC do dia 14
+    it('devolve o dia inteiro, no relógio da clínica, quando from e to são o mesmo dia', () => {
+      const period = rules.resolveCalendarPeriod('2026-10-13', '2026-10-13');
+
+      expect(period.startsAt).toEqual(new Date('2026-10-13T00:00:00-03:00'));
+      expect(period.endsAt).toEqual(new Date('2026-10-14T00:00:00-03:00'));
+    });
+
+    // O último dia conta inteiro: o fim é a meia-noite do dia SEGUINTE a to
+    it('inclui o dia inteiro do to (o fim é a meia-noite do dia seguinte)', () => {
+      const period = rules.resolveCalendarPeriod('2026-10-12', '2026-10-16');
+
+      expect(period.startsAt).toEqual(new Date('2026-10-12T03:00:00.000Z'));
+      expect(period.endsAt).toEqual(new Date('2026-10-17T03:00:00.000Z'));
+    });
+
+    // A conta de dias não se perde na virada de mês e de ano
+    it('atravessa a virada de mês e de ano', () => {
+      const period = rules.resolveCalendarPeriod('2026-12-31', '2027-01-01');
+
+      expect(period.startsAt).toEqual(new Date('2026-12-31T03:00:00.000Z'));
+      expect(period.endsAt).toEqual(new Date('2027-01-02T03:00:00.000Z'));
+    });
+
+    // 31 dias contando as duas pontas (de 01/10 a 31/10) ainda vale
+    it('aceita um período de 31 dias', () => {
+      expect(() =>
+        rules.resolveCalendarPeriod('2026-10-01', '2026-10-31'),
+      ).not.toThrow();
+    });
+
+    // 32 dias (de 01/10 a 01/11) passa do limite
+    it('recusa um período de 32 dias (400)', () => {
+      const erro = capturar(() =>
+        rules.resolveCalendarPeriod('2026-10-01', '2026-11-01'),
+      );
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro?.errorCode).toBe('DADOS_INVALIDOS');
+      expect(erro?.message).toBe('the period must not exceed 31 days');
+    });
+
+    it('recusa from depois de to (400)', () => {
+      const erro = capturar(() =>
+        rules.resolveCalendarPeriod('2026-10-16', '2026-10-12'),
+      );
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro?.errorCode).toBe('DADOS_INVALIDOS');
+      expect(erro?.message).toBe('from must not be after to');
+    });
+  });
 });
