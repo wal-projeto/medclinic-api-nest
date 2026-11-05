@@ -4,6 +4,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { MedicalRecord } from './medical-record.entity';
 import {
+  MedicalRecordFilter,
+  MedicalRecordPage,
   MedicalRecordRepository,
   NewMedicalRecord,
 } from './medical-record.repository';
@@ -22,5 +24,20 @@ export class MedicalRecordTypeormRepository implements MedicalRecordRepository {
   // INSERT INTO medical_record (patient_id, doctor_id, text) VALUES (...) RETURNING id, created_at
   create(data: NewMedicalRecord): Promise<MedicalRecord> {
     return this.repository.save(this.repository.create(data)); // create monta o objeto, o save faz o INSERT e devolve com o id e o createdAt preenchidos pelo banco
+  }
+
+  // SELECT ... WHERE patient_id = $1 ORDER BY created_at DESC, id DESC LIMIT take OFFSET skip, mais o COUNT do total
+  async findPageByPatientId({
+    patientId,
+    skip,
+    take,
+  }: MedicalRecordFilter): Promise<MedicalRecordPage> {
+    const [records, total] = await this.repository.findAndCount({
+      where: { patientId },
+      order: { createdAt: 'DESC', id: 'DESC' }, // o mais novo primeiro; no empate de data, o de id maior (o que foi gravado depois)
+      skip,
+      take,
+    });
+    return { records, total };
   }
 }
