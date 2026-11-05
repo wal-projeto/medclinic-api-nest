@@ -64,4 +64,12 @@ export abstract class AppointmentRepository {
     from: AppointmentStatus,
     to: AppointmentStatus,
   ): Promise<boolean>;
+
+  // "existe alguma consulta entre este médico e este paciente com um destes estados?" (só diz se existe: não traz as linhas).
+  // Serve ao vínculo do prontuário: quem decide quais estados contam é o service
+  abstract existsByDoctorAndPatient(
+    doctorId: number,
+    patientId: number,
+    statuses: AppointmentStatus[],
+  ): Promise<boolean>;
 }

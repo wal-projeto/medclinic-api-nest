@@ -32,5 +32,6 @@ import { AppointmentService } from './appointment.service';
     AppointmentService,
     CalendarService,
   ],
+  exports: [AppointmentRepository], // o prontuário usa esta porta (o vínculo do médico com o paciente)
 })
 export class AppointmentModule {}

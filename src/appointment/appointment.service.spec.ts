@@ -193,6 +193,10 @@ class AppointmentRepositoryFake implements AppointmentRepository {
     found.status = to;
     return Promise.resolve(true);
   }
+
+  existsByDoctorAndPatient(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
 }
 
 describe('AppointmentService', () => {

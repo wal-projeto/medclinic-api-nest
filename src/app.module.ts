@@ -12,6 +12,7 @@ import { AppValidationPipe } from './@common/pipes/app-validation.pipe';
 import { PatientModule } from './patient/patient.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { AppointmentModule } from './appointment/appointment.module';
+import { MedicalRecordModule } from './medical-record/medical-record.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AppointmentModule } from './appointment/appointment.module';
     PatientModule, // A aplicaçõa passa a carregar o módulo de paciente. Com isso a rota passa a existir e a API responde 201 para criar Patient
     DoctorModule, // A aplicaçõa passa a carregar o módulo de médico. Com isso a rota passa a existir e a API responde 201 para criar Doctor
     AppointmentModule, // A aplicaçõa passa a carregar o módulo de consulta. Com isso a rota passa a existir e a API responde 201 para criar Appointment
+    MedicalRecordModule, // A aplicação passa a carregar o módulo de prontuário. Com isso a rota POST /patients/:patientId/medical-records passa a existir
   ],
   controllers: [HealthController],
   providers: [
