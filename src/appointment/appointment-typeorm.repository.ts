@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   And,
   FindOptionsWhere,
+  In,
   LessThan,
   MoreThanOrEqual,
   Not,
@@ -133,6 +134,17 @@ export class AppointmentTypeormRepository implements AppointmentRepository {
       { status: to }, // esse objeto é o SET status = 'done'.
     );
     return result.affected === 1; // quantas linhas o UPDATE alterou. O TypeORM devolve no UpdateResult.  1 se casou; 0 se alguém já trocou
+  }
+
+  // SELECT 1 ... WHERE doctor_id = $1 AND patient_id = $2 AND status IN ($3, $4) : só pergunta se existe (exists), sem trazer a consulta
+  existsByDoctorAndPatient(
+    doctorId: number,
+    patientId: number,
+    statuses: AppointmentStatus[],
+  ): Promise<boolean> {
+    return this.repository.exists({
+      where: { doctorId, patientId, status: In(statuses) },
+    });
   }
 }
 
