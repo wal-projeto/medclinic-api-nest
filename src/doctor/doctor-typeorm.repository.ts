@@ -58,4 +58,12 @@ export class DoctorTypeormRepository implements DoctorRepository {
       relations: { user: true }, // traz o usuário junto (JOIN): o nome e o e-mail do médico estão na tabela user
     });
   }
+
+  // BUSCA O MÉDICO PELO NÚMERO DO USUÁRIO (o que vem no token). Usuário sem registro de médico → null
+  findByUserId(userId: number): Promise<Doctor | null> {
+    if (userId < 1 || userId > MAX_INTEGER) {
+      return Promise.resolve(null);
+    }
+    return this.repository.findOne({ where: { user: { id: userId } } });
+  }
 }

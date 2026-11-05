@@ -10,6 +10,8 @@ import {
 import { Doctor } from '../doctor/doctor.entity';
 import { Appointment } from './appointment.entity';
 import {
+  AppointmentFilter,
+  AppointmentPage,
   AppointmentRepository,
   AssertFree,
   LOOKBACK_MS,
@@ -78,5 +80,34 @@ export class AppointmentTypeormRepository implements AppointmentRepository {
       },
       order: { startsAt: 'ASC', id: 'ASC' }, // a mais cedo primeiro; no empate, a mais antiga
     });
+  }
+
+  // SELECT ... WHERE (só os filtros que vieram) ORDER BY starts_at, id LIMIT take OFFSET skip, mais o COUNT do total
+  async findPage({
+    doctorId,
+    patientId,
+    status,
+    from,
+    to,
+    skip,
+    take,
+  }: AppointmentFilter): Promise<AppointmentPage> {
+    // só entram na condição os filtros que vieram (o TypeORM recusa campo com valor undefined dentro do where)
+    const where: FindOptionsWhere<Appointment> = {};
+    if (doctorId !== undefined) where.doctorId = doctorId;
+    if (patientId !== undefined) where.patientId = patientId;
+    if (status !== undefined) where.status = status;
+    // o período pode ter só o começo, só o fim ou os dois
+    if (from && to) where.startsAt = And(MoreThanOrEqual(from), LessThan(to));
+    else if (from) where.startsAt = MoreThanOrEqual(from);
+    else if (to) where.startsAt = LessThan(to);
+
+    const [appointments, total] = await this.repository.findAndCount({
+      where,
+      order: { startsAt: 'ASC', id: 'ASC' }, // a mais cedo primeiro; no empate, a mais antiga
+      skip,
+      take,
+    });
+    return { appointments, total };
   }
 }

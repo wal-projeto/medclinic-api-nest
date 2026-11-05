@@ -4,7 +4,7 @@
 import { IsISO8601, Matches } from 'class-validator';
 
 // Só dia, mês e ano, com zeros: "2026-10-05" passa; "2026-10-5", "05/10/2026" e "2026-10-05T00:00:00Z" não
-const SO_DATA = /^\d{4}-\d{2}-\d{2}$/;
+export const SO_DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 export class CalendarQueryDto {
   @Matches(SO_DATA, { message: 'from must be in the format YYYY-MM-DD' })

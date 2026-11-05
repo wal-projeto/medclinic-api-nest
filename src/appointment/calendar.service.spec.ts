@@ -11,6 +11,7 @@ import { WorkShift } from '../doctor/work-shift.entity';
 import { Patient } from '../patient/patient.entity';
 import { Appointment } from './appointment.entity';
 import {
+  AppointmentPage,
   AppointmentRepository,
   AssertFree,
   NewAppointment,
@@ -36,6 +37,10 @@ class DoctorRepositoryFake implements DoctorRepository {
 
   findPage(): Promise<DoctorPage> {
     return Promise.resolve({ doctors: [], total: 0 });
+  }
+
+  findByUserId(): Promise<Doctor | null> {
+    return Promise.resolve(null);
   }
 }
 
@@ -64,6 +69,10 @@ class AppointmentRepositoryFake implements AppointmentRepository {
 
   createWithLock(_data: NewAppointment, _assertFree: AssertFree) {
     return Promise.reject<Appointment>(new Error('não usado'));
+  }
+
+  findPage(): Promise<AppointmentPage> {
+    return Promise.resolve({ appointments: [], total: 0 });
   }
 
   findActiveByDoctorInPeriod(

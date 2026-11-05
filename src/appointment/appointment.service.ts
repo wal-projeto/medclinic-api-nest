@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppException } from '../@common/exceptions/app.exception';
+import { paginate } from '../@common/pagination/paginated';
+import type { AuthUser } from '../auth/jwt.service';
 import { DoctorRepository } from '../doctor/doctor.repository';
 import { WorkScheduleRepository } from '../doctor/work-schedule.repository';
 import { PatientRepository } from '../patient/patient.repository';
@@ -7,6 +9,7 @@ import { Appointment } from './appointment.entity';
 import { AppointmentRepository } from './appointment.repository';
 import { AppointmentRulesService } from './appointment-rules.service';
 import { CreateAppointmentDto } from './dtos/create-appointment.dto';
+import { ListAppointmentsQueryDto } from './dtos/list-appointments-query.dto';
 
 @Injectable()
 export class AppointmentService {
@@ -66,6 +69,41 @@ export class AppointmentService {
       },
     );
     return this.toResponse(saved);
+  }
+
+  // LISTA AS CONSULTAS COM FILTROS E PAGINAÇÃO. Quem é só médico (sem admin) enxerga apenas as consultas dele, não importa o que mande na URL
+  async list(query: ListAppointmentsQueryDto, user: AuthUser) {
+    // 1) o período (from e to opcionais, dias inteiros no relógio de São Paulo). 400 se from é depois de to
+    const { from, to } = this.rules.resolveListPeriod(query.from, query.to);
+
+    // 2) o filtro forçado por perfil: o doctor só vê as consultas do próprio registro de médico
+    let doctorId = query.doctorId;
+    if (user.roles.includes('doctor') && !user.roles.includes('admin')) {
+      const own = await this.doctorRepository.findByUserId(user.id);
+      // usuário doctor sem registro de médico, ou pedindo o médico de outro: lista vazia (e a busca nem acontece)
+      if (!own || (query.doctorId !== undefined && query.doctorId !== own.id)) {
+        return paginate([], 0, query.page, query.pageSize);
+      }
+      doctorId = own.id;
+    }
+
+    // 3) a página pedida (page e pageSize viram skip e take) com os filtros que vieram
+    const { appointments, total } = await this.appointmentRepository.findPage({
+      doctorId,
+      patientId: query.patientId,
+      status: query.status,
+      from,
+      to,
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    });
+
+    return paginate(
+      appointments.map((appointment) => this.toResponse(appointment)),
+      total,
+      query.page,
+      query.pageSize,
+    );
   }
 
   // O contrato: só os seis campos (sem doctor, patient, createdAt e updatedAt). As datas saem em UTC (ISO) no JSON
