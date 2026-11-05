@@ -53,4 +53,7 @@ export abstract class AppointmentRepository {
   // "liste as consultas (com os filtros que vierem), da mais cedo para a mais tarde, uma página de cada vez e com o total"
   // (nenhuma consulta casa: { appointments: [], total: 0 })
   abstract findPage(filter: AppointmentFilter): Promise<AppointmentPage>;
+
+  // "me dê a consulta deste número, ou null se não houver"
+  abstract findById(id: number): Promise<Appointment | null>;
 }

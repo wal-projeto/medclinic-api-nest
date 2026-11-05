@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { GetAuthUser } from '../auth/decorator/get-auth-user.decorator';
 import { RequireRole } from '../auth/decorator/require-role.decorator';
 import type { AuthUser } from '../auth/jwt.service';
@@ -22,5 +30,13 @@ export class AppointmentController {
     @GetAuthUser() user: AuthUser, // quem está pedindo: { id, roles }
   ) {
     return this.appointmentService.list(query, user);
+  }
+
+  @Get(':id') // GET /api/v1/appointments/:id : qualquer perfil autenticado (o doctor só vê a dele); "2" -> 2 ; "abc" -> 400
+  findById(
+    @Param('id', ParseIntPipe) id: number,
+    @GetAuthUser() user: AuthUser, // quem está pedindo: { id: 5, roles: ['doctor'] }
+  ) {
+    return this.appointmentService.findById(id, user);
   }
 }

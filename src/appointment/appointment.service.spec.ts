@@ -166,6 +166,11 @@ class AppointmentRepositoryFake implements AppointmentRepository {
       total: casam.length,
     });
   }
+
+  // a consulta pelo número: a que está guardada com esse id, ou null
+  findById(id: number): Promise<Appointment | null> {
+    return Promise.resolve(this.stored.find((a) => a.id === id) ?? null);
+  }
 }
 
 describe('AppointmentService', () => {
@@ -623,6 +628,110 @@ describe('AppointmentService', () => {
       expect(erro.errorCode).toBe('DADOS_INVALIDOS');
       expect(erro.message).toBe('from must not be after to');
       expect(appointments.pages).toHaveLength(0);
+    });
+  });
+
+  describe('findById', () => {
+    const admin: AuthUser = { id: 1, roles: ['admin'] };
+    const secretary: AuthUser = { id: 2, roles: ['secretary'] };
+    const helena: AuthUser = { id: 102, roles: ['doctor'] }; // o usuário da Dra. Helena (médico 2)
+    // duas consultas: a 1 é da Helena (médico 2) e a 2 é do médico 3
+    const duasConsultas = () => [
+      marcada(
+        2,
+        10,
+        '2026-10-13T11:00:00.000Z',
+        '2026-10-13T11:30:00.000Z',
+        'scheduled',
+        1,
+      ),
+      marcada(
+        3,
+        11,
+        '2026-10-14T11:00:00.000Z',
+        '2026-10-14T11:30:00.000Z',
+        'cancelled',
+        2,
+      ),
+    ];
+
+    // O caminho feliz: os seis campos do contrato, e a cancelada também aparece (consultar não é listar as ativas)
+    it('devolve a consulta com os seis campos do contrato', async () => {
+      montar(duasConsultas());
+
+      const resultado = await service.findById(2, admin);
+
+      expect(resultado).toEqual({
+        id: 2,
+        doctorId: 3,
+        patientId: 11,
+        startsAt: new Date('2026-10-14T11:00:00.000Z'),
+        endsAt: new Date('2026-10-14T11:30:00.000Z'),
+        status: 'cancelled',
+      });
+    });
+
+    it('deixa a secretaria consultar a consulta de qualquer médico', async () => {
+      montar(duasConsultas());
+
+      const resultado = await service.findById(2, secretary);
+
+      expect(resultado.doctorId).toBe(3);
+    });
+
+    // O doctor consulta a consulta dele
+    it('deixa o doctor consultar a própria consulta', async () => {
+      montar(duasConsultas());
+
+      const resultado = await service.findById(1, helena);
+
+      expect(resultado.doctorId).toBe(2);
+    });
+
+    // A consulta de outro médico: 403 ACESSO_NEGADO
+    it('lança ACESSO_NEGADO quando o doctor pede a consulta de outro médico', async () => {
+      montar(duasConsultas());
+
+      const erro = await service.findById(2, helena).catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('ACESSO_NEGADO');
+    });
+
+    // Usuário doctor sem registro de médico não é o médico de nenhuma consulta
+    it('lança ACESSO_NEGADO quando o doctor não tem registro de médico', async () => {
+      montar(duasConsultas());
+
+      const erro = await service
+        .findById(1, { id: 555, roles: ['doctor'] })
+        .catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('ACESSO_NEGADO');
+    });
+
+    // Quem tem os dois perfis (doctor e admin) não é limitado: o admin vence
+    it('deixa quem é doctor e admin consultar a consulta de outro médico', async () => {
+      montar(duasConsultas());
+
+      const resultado = await service.findById(2, {
+        id: 102,
+        roles: ['doctor', 'admin'],
+      });
+
+      expect(resultado.doctorId).toBe(3);
+    });
+
+    // A consulta não existe: 404 para todos, inclusive para o doctor (o 404 vem antes do 403)
+    it('lança RECURSO_NAO_ENCONTRADO quando a consulta não existe', async () => {
+      montar(duasConsultas());
+
+      const erroAdmin = await service.findById(99, admin).catch((err) => err);
+      const erroDoctor = await service.findById(99, helena).catch((err) => err);
+
+      expect(erroAdmin).toBeInstanceOf(AppException);
+      expect(erroAdmin.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
+      expect(erroDoctor.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
     });
   });
 });

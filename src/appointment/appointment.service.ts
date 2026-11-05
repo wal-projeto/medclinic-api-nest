@@ -78,7 +78,7 @@ export class AppointmentService {
 
     // 2) o filtro forçado por perfil: o doctor só vê as consultas do próprio registro de médico
     let doctorId = query.doctorId;
-    if (user.roles.includes('doctor') && !user.roles.includes('admin')) {
+    if (this.isOnlyDoctor(user)) {
       const own = await this.doctorRepository.findByUserId(user.id);
       // usuário doctor sem registro de médico, ou pedindo o médico de outro: lista vazia (e a busca nem acontece)
       if (!own || (query.doctorId !== undefined && query.doctorId !== own.id)) {
@@ -104,6 +104,39 @@ export class AppointmentService {
       query.page,
       query.pageSize,
     );
+  }
+
+  // CONSULTA UMA CONSULTA PELO id. Quem é só médico (sem admin) só pode ver as dele: a de outro médico dá 403
+  async findById(id: number, user: AuthUser) {
+    // recebe o número de quem pede
+    const appointment = await this.appointmentRepository.findById(id);
+    if (!appointment) {
+      // 404 antes de qualquer conferência de perfil.
+      throw new AppException(
+        'RECURSO_NAO_ENCONTRADO',
+        'Consulta não encontrada',
+      );
+    }
+
+    if (this.isOnlyDoctor(user)) {
+      // só entra no id quem é só médico. ['doctor'] -> true. ['doctor','admin'], ['secretary'], ['admin'] → false.
+      const own = await this.doctorRepository.findByUserId(user.id); // o médico do usuário do token.
+      // own?.id é o número do médico, ou undefined se own for null; diferente do médico da consulta → 403
+      if (own?.id !== appointment.doctorId) {
+        //
+        throw new AppException(
+          'ACESSO_NEGADO',
+          'O médico só pode ver as próprias consultas',
+        );
+      }
+    }
+
+    return this.toResponse(appointment);
+  }
+
+  // "É só médico": tem o perfil doctor e não tem o admin (quem acumula os dois é tratado como admin)
+  private isOnlyDoctor(user: AuthUser): boolean {
+    return user.roles.includes('doctor') && !user.roles.includes('admin');
   }
 
   // O contrato: só os seis campos (sem doctor, patient, createdAt e updatedAt). As datas saem em UTC (ISO) no JSON

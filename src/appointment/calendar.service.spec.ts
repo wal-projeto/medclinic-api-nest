@@ -75,6 +75,10 @@ class AppointmentRepositoryFake implements AppointmentRepository {
     return Promise.resolve({ appointments: [], total: 0 });
   }
 
+  findById(): Promise<Appointment | null> {
+    return Promise.resolve(null);
+  }
+
   findActiveByDoctorInPeriod(
     doctorId: number,
     from: Date,
