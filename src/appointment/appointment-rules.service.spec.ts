@@ -361,5 +361,16 @@ describe('AppointmentRulesService', () => {
       expect(rules.actorsForTransition('scheduled', 'scheduled')).toBeNull();
       expect(rules.actorsForTransition('scheduled', 'done')).toBeNull();
     });
+
+    // A lista devolvida é uma cópia: mexer nela não pode mudar a tabela do ciclo (que é a regra de autorização)
+    it('devolve uma cópia da lista: mexer nela não muda o ciclo', () => {
+      const lista = rules.actorsForTransition('scheduled', 'in_progress');
+      lista?.push('secretary');
+
+      expect(rules.actorsForTransition('scheduled', 'in_progress')).toEqual([
+        'appointmentDoctor',
+        'admin',
+      ]);
+    });
   });
 });

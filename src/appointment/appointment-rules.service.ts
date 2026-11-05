@@ -126,12 +126,13 @@ export class AppointmentRulesService {
     };
   }
 
-  // QUEM PODE fazer a troca de `from` para `to`, ou null se o ciclo de vida não permite essa troca (inclusive ficar no mesmo state)
+  // QUEM PODE fazer a troca de `from` para `to`, ou null se o ciclo de vida não permite essa troca (inclusive ficar no mesmo estado)
   actorsForTransition(
     from: AppointmentStatus,
     to: AppointmentStatus,
   ): StatusActor[] | null {
-    return STATUS_TRANSITIONS[from][to] ?? null;
+    const actors = STATUS_TRANSITIONS[from][to];
+    return actors ? [...actors] : null; // uma CÓPIA: quem receber a lista pode mexer nela sem alterar a tabela do ciclo
   }
 
   // Há sobreposição quando uma começa antes de a outra terminar E a outra começa antes de a primeira terminar.
