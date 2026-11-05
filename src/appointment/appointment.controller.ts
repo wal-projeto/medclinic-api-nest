@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ import type { AuthUser } from '../auth/jwt.service';
 import { AppointmentService } from './appointment.service';
 import { CreateAppointmentDto } from './dtos/create-appointment.dto';
 import { ListAppointmentsQueryDto } from './dtos/list-appointments-query.dto';
+import { UpdateAppointmentStatusDto } from './dtos/update-appointment-status.dto';
 
 @Controller('appointments') // api/v1/appointments
 export class AppointmentController {
@@ -38,5 +40,14 @@ export class AppointmentController {
     @GetAuthUser() user: AuthUser, // quem está pedindo: { id: 5, roles: ['doctor'] }
   ) {
     return this.appointmentService.findById(id, user);
+  }
+
+  @Patch(':id/status') // PATCH /api/v1/appointments/:id/status : qualquer perfil autenticado; o service decide quem pode cada troca. O Nest responde 200
+  changeStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateAppointmentStatusDto, // O corpo, já validado e limpo pelo pipe global : { "status": "in_progress" }
+    @GetAuthUser() user: AuthUser, // quem está pedindo: { id, roles }
+  ) {
+    return this.appointmentService.changeStatus(id, body, user);
   }
 }

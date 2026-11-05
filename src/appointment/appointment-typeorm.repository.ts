@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { MAX_INTEGER } from '../@common/database/postgres-limits';
 import { Doctor } from '../doctor/doctor.entity';
-import { Appointment } from './appointment.entity';
+import { Appointment, AppointmentStatus } from './appointment.entity';
 import {
   AppointmentFilter,
   AppointmentPage,
@@ -120,4 +120,21 @@ export class AppointmentTypeormRepository implements AppointmentRepository {
     }
     return this.repository.findOne({ where: { id } }); // O que acontece: SELECT ... WHERE id = $1 LIMIT 1. Com valor: findOne({ where: { id: 7 } }) → a consulta 7, ou null
   }
+
+  // UPDATE appointment SET status = $to, updated_at = now() WHERE id = $id AND status = $from. Conferir e gravar num comando só:
+  // se outra requisição já trocou o estado, o WHERE não casa com nenhuma linha e o resultado é false (nada gravado)
+  async updateStatus(
+    id: number,
+    from: AppointmentStatus,
+    to: AppointmentStatus,
+  ): Promise<boolean> {
+    const result = await this.repository.update(
+      { id, status: from }, // esse objeto é o WHERE ... SET status = 'done' WHERE id = $id(7) AND status = $from('in_progress' )
+      { status: to }, // esse objeto é o SET status = 'done'.
+    );
+    return result.affected === 1; // quantas linhas o UPDATE alterou. O TypeORM devolve no UpdateResult.  1 se casou; 0 se alguém já trocou
+  }
 }
+
+// Não precisa guardar o id contra o limite do integer (como no findById): o service só
+// chama updateStatus com o id de uma consulta que acabou de ser encontrada.

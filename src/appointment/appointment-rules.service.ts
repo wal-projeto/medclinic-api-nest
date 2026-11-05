@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppException } from '../@common/exceptions/app.exception';
 import { WorkShift } from '../doctor/work-shift.entity';
+import { AppointmentStatus } from './appointment.entity';
 
 // A hora do turno é hora de relógio da clínica; o fuso dela é o de São Paulo (a conta de "que dia da semana e que horas são" é feita nele)
 const CLINIC_TIME_ZONE = 'America/Sao_Paulo';
@@ -16,6 +17,27 @@ const WEEK_DAYS: Record<string, number> = {
 const MINUTE_MS = 60 * 1000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
 const MAX_CALENDAR_DAYS = 31; // o período da agenda tem no máximo 31 dias (contando o primeiro e o último)
+
+// Quem pode fazer uma troca de estado. 'appointmentDoctor' é o médico DAQUELA consulta (e não qualquer usuário doctor)
+export type StatusActor = 'admin' | 'secretary' | 'appointmentDoctor';
+
+// O ciclo de vida: de cada estado, para quais estados se pode ir e QUEM pode fazer a troca. Estado ausente = troca proibida.
+// done e cancelled são o fim da linha: ninguém sai deles
+const STATUS_TRANSITIONS: Record<
+  AppointmentStatus,
+  Partial<Record<AppointmentStatus, StatusActor[]>>
+> = {
+  scheduled: {
+    in_progress: ['appointmentDoctor', 'admin'],
+    cancelled: ['admin', 'secretary', 'appointmentDoctor'],
+  },
+  in_progress: {
+    done: ['appointmentDoctor', 'admin'],
+    cancelled: ['admin', 'appointmentDoctor'],
+  },
+  done: {},
+  cancelled: {},
+};
 
 // Um período de uma consulta: o que importa para a sobreposição
 export type Period = { startsAt: Date; endsAt: Date };
@@ -102,6 +124,14 @@ export class AppointmentRulesService {
       to:
         toDay === undefined ? undefined : this.toClinicMidnight(toDay + DAY_MS),
     };
+  }
+
+  // QUEM PODE fazer a troca de `from` para `to`, ou null se o ciclo de vida não permite essa troca (inclusive ficar no mesmo state)
+  actorsForTransition(
+    from: AppointmentStatus,
+    to: AppointmentStatus,
+  ): StatusActor[] | null {
+    return STATUS_TRANSITIONS[from][to] ?? null;
   }
 
   // Há sobreposição quando uma começa antes de a outra terminar E a outra começa antes de a primeira terminar.

@@ -10,7 +10,7 @@ import { WorkShift } from '../doctor/work-shift.entity';
 import { Patient } from '../patient/patient.entity';
 import { PatientPage, PatientRepository } from '../patient/patient.repository';
 import type { AuthUser } from '../auth/jwt.service';
-import { Appointment } from './appointment.entity';
+import { Appointment, AppointmentStatus } from './appointment.entity';
 import {
   AppointmentFilter,
   AppointmentPage,
@@ -170,6 +170,28 @@ class AppointmentRepositoryFake implements AppointmentRepository {
   // a consulta pelo número: a que está guardada com esse id, ou null
   findById(id: number): Promise<Appointment | null> {
     return Promise.resolve(this.stored.find((a) => a.id === id) ?? null);
+  }
+
+  // a troca de estado: anota cada pedido (updates) e faz o que o banco faria: só troca se a consulta ainda está em `from`
+  updates: { id: number; from: AppointmentStatus; to: AppointmentStatus }[] =
+    [];
+  concurrentChangeTo?: AppointmentStatus; // simula outra requisição que mudou o estado entre a leitura e a gravação
+
+  updateStatus(
+    id: number,
+    from: AppointmentStatus,
+    to: AppointmentStatus,
+  ): Promise<boolean> {
+    this.updates.push({ id, from, to });
+    const found = this.stored.find((a) => a.id === id);
+    if (found && this.concurrentChangeTo) {
+      found.status = this.concurrentChangeTo;
+    }
+    if (!found || found.status !== from) {
+      return Promise.resolve(false);
+    }
+    found.status = to;
+    return Promise.resolve(true);
   }
 }
 
@@ -732,6 +754,259 @@ describe('AppointmentService', () => {
       expect(erroAdmin).toBeInstanceOf(AppException);
       expect(erroAdmin.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
       expect(erroDoctor.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
+    });
+  });
+
+  describe('changeStatus', () => {
+    const admin: AuthUser = { id: 1, roles: ['admin'] };
+    const secretary: AuthUser = { id: 2, roles: ['secretary'] };
+    const helena: AuthUser = { id: 102, roles: ['doctor'] }; // o usuário da Dra. Helena (médico 2)
+    // a consulta 1, da Helena (médico 2), no estado pedido
+    const daHelena = (status: AppointmentStatus) => [
+      marcada(
+        2,
+        10,
+        '2026-10-13T11:00:00.000Z',
+        '2026-10-13T11:30:00.000Z',
+        status,
+        1,
+      ),
+    ];
+    // a consulta 1, do médico 3 (a Helena não é a médica dela)
+    const doMedico3 = (status: AppointmentStatus) => [
+      marcada(
+        3,
+        10,
+        '2026-10-13T11:00:00.000Z',
+        '2026-10-13T11:30:00.000Z',
+        status,
+        1,
+      ),
+    ];
+    const estadoGravado = () => appointments.stored[0].status;
+
+    // O caminho feliz: o médico da consulta inicia o atendimento; a resposta tem os seis campos e o estado novo
+    it('deixa o médico da consulta iniciar o atendimento (scheduled → in_progress)', async () => {
+      montar(daHelena('scheduled'));
+
+      const resultado = await service.changeStatus(
+        1,
+        { status: 'in_progress' },
+        helena,
+      );
+
+      expect(resultado).toEqual({
+        id: 1,
+        doctorId: 2,
+        patientId: 10,
+        startsAt: new Date('2026-10-13T11:00:00.000Z'),
+        endsAt: new Date('2026-10-13T11:30:00.000Z'),
+        status: 'in_progress',
+      });
+      expect(appointments.updates).toEqual([
+        { id: 1, from: 'scheduled', to: 'in_progress' },
+      ]);
+    });
+
+    it('deixa o médico da consulta concluí-la (in_progress → done)', async () => {
+      montar(daHelena('in_progress'));
+
+      const resultado = await service.changeStatus(
+        1,
+        { status: 'done' },
+        helena,
+      );
+
+      expect(resultado.status).toBe('done');
+      expect(estadoGravado()).toBe('done');
+    });
+
+    it('deixa o médico da consulta cancelá-la, agendada ou em andamento', async () => {
+      for (const de of ['scheduled', 'in_progress'] as const) {
+        montar(daHelena(de));
+
+        const resultado = await service.changeStatus(
+          1,
+          { status: 'cancelled' },
+          helena,
+        );
+
+        expect(resultado.status).toBe('cancelled');
+        expect(estadoGravado()).toBe('cancelled');
+      }
+    });
+
+    // O admin faz as quatro trocas do ciclo, em qualquer consulta
+    it('deixa o admin fazer as quatro trocas do ciclo', async () => {
+      const trocas: [AppointmentStatus, AppointmentStatus][] = [
+        ['scheduled', 'in_progress'],
+        ['scheduled', 'cancelled'],
+        ['in_progress', 'done'],
+        ['in_progress', 'cancelled'],
+      ];
+      for (const [de, para] of trocas) {
+        montar(daHelena(de));
+
+        const resultado = await service.changeStatus(
+          1,
+          { status: para },
+          admin,
+        );
+
+        expect(resultado.status).toBe(para);
+        expect(estadoGravado()).toBe(para);
+      }
+    });
+
+    // A secretaria só cancela consulta agendada
+    it('deixa a secretaria cancelar uma consulta agendada', async () => {
+      montar(daHelena('scheduled'));
+
+      const resultado = await service.changeStatus(
+        1,
+        { status: 'cancelled' },
+        secretary,
+      );
+
+      expect(resultado.status).toBe('cancelled');
+    });
+
+    it('lança ACESSO_NEGADO quando a secretaria tenta cancelar uma consulta em andamento', async () => {
+      montar(daHelena('in_progress'));
+
+      const erro = await service
+        .changeStatus(1, { status: 'cancelled' }, secretary)
+        .catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('ACESSO_NEGADO');
+      expect(appointments.updates).toHaveLength(0);
+      expect(estadoGravado()).toBe('in_progress');
+    });
+
+    it('lança ACESSO_NEGADO quando a secretaria tenta iniciar ou concluir', async () => {
+      const trocas: [AppointmentStatus, AppointmentStatus][] = [
+        ['scheduled', 'in_progress'],
+        ['in_progress', 'done'],
+      ];
+      for (const [de, para] of trocas) {
+        montar(daHelena(de));
+
+        const erro = await service
+          .changeStatus(1, { status: para }, secretary)
+          .catch((err) => err);
+
+        expect(erro.errorCode).toBe('ACESSO_NEGADO');
+        expect(estadoGravado()).toBe(de);
+      }
+    });
+
+    // O doctor que não é o médico da consulta: 403, mesmo numa troca que o ciclo não permite (não descobre o estado dela)
+    it('lança ACESSO_NEGADO quando o doctor mexe na consulta de outro médico, mesmo numa troca fora do ciclo', async () => {
+      for (const [de, para] of [
+        ['scheduled', 'in_progress'],
+        ['done', 'cancelled'],
+      ] as const) {
+        montar(doMedico3(de));
+
+        const erro = await service
+          .changeStatus(1, { status: para }, helena)
+          .catch((err) => err);
+
+        expect(erro).toBeInstanceOf(AppException);
+        expect(erro.errorCode).toBe('ACESSO_NEGADO');
+        expect(appointments.updates).toHaveLength(0);
+      }
+    });
+
+    it('lança ACESSO_NEGADO quando o doctor não tem registro de médico', async () => {
+      montar(daHelena('scheduled'));
+
+      const erro = await service
+        .changeStatus(
+          1,
+          { status: 'in_progress' },
+          { id: 555, roles: ['doctor'] },
+        )
+        .catch((err) => err);
+
+      expect(erro.errorCode).toBe('ACESSO_NEGADO');
+      expect(appointments.updates).toHaveLength(0);
+    });
+
+    // Quem tem os dois perfis (doctor e admin) não é limitado: o admin vence
+    it('deixa quem é doctor e admin mexer na consulta de outro médico', async () => {
+      montar(doMedico3('scheduled'));
+
+      const resultado = await service.changeStatus(
+        1,
+        { status: 'cancelled' },
+        { id: 102, roles: ['doctor', 'admin'] },
+      );
+
+      expect(resultado.status).toBe('cancelled');
+    });
+
+    // O ciclo de vida: as 8 trocas que não existem dão 422 até para o admin, e nada é gravado
+    it('lança TRANSICAO_INVALIDA nas trocas que o ciclo não permite, até para o admin', async () => {
+      const proibidas: [AppointmentStatus, AppointmentStatus][] = [
+        ['scheduled', 'done'],
+        ['scheduled', 'scheduled'],
+        ['in_progress', 'scheduled'],
+        ['in_progress', 'in_progress'],
+        ['done', 'in_progress'],
+        ['done', 'cancelled'],
+        ['cancelled', 'scheduled'],
+        ['cancelled', 'done'],
+      ];
+      for (const [de, para] of proibidas) {
+        montar(daHelena(de));
+
+        const erro = await service
+          .changeStatus(1, { status: para }, admin)
+          .catch((err) => err);
+
+        expect(erro).toBeInstanceOf(AppException);
+        expect(erro.errorCode).toBe('TRANSICAO_INVALIDA');
+        expect(appointments.updates).toHaveLength(0);
+        expect(estadoGravado()).toBe(de);
+      }
+    });
+
+    // O médico da consulta também recebe 422 (e não 403) quando tenta sair de um estado final
+    it('lança TRANSICAO_INVALIDA, e não ACESSO_NEGADO, quando o médico da consulta tenta mexer numa concluída', async () => {
+      montar(daHelena('done'));
+
+      const erro = await service
+        .changeStatus(1, { status: 'cancelled' }, helena)
+        .catch((err) => err);
+
+      expect(erro.errorCode).toBe('TRANSICAO_INVALIDA');
+    });
+
+    it('lança RECURSO_NAO_ENCONTRADO quando a consulta não existe, sem gravar', async () => {
+      montar(daHelena('scheduled'));
+
+      const erro = await service
+        .changeStatus(99, { status: 'cancelled' }, admin)
+        .catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('RECURSO_NAO_ENCONTRADO');
+      expect(appointments.updates).toHaveLength(0);
+    });
+
+    // Duas requisições ao mesmo tempo: a outra cancelou entre a leitura e a gravação. A gravação condicional não casa: 422
+    it('lança TRANSICAO_INVALIDA quando outra requisição mudou o estado antes da gravação', async () => {
+      montar(daHelena('in_progress'));
+      appointments.concurrentChangeTo = 'cancelled';
+
+      const erro = await service
+        .changeStatus(1, { status: 'done' }, helena)
+        .catch((err) => err);
+
+      expect(erro.errorCode).toBe('TRANSICAO_INVALIDA');
+      expect(estadoGravado()).toBe('cancelled');
     });
   });
 });

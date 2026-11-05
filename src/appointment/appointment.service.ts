@@ -7,9 +7,13 @@ import { WorkScheduleRepository } from '../doctor/work-schedule.repository';
 import { PatientRepository } from '../patient/patient.repository';
 import { Appointment } from './appointment.entity';
 import { AppointmentRepository } from './appointment.repository';
-import { AppointmentRulesService } from './appointment-rules.service';
+import {
+  AppointmentRulesService,
+  StatusActor,
+} from './appointment-rules.service';
 import { CreateAppointmentDto } from './dtos/create-appointment.dto';
 import { ListAppointmentsQueryDto } from './dtos/list-appointments-query.dto';
+import { UpdateAppointmentStatusDto } from './dtos/update-appointment-status.dto';
 
 @Injectable()
 export class AppointmentService {
@@ -132,6 +136,84 @@ export class AppointmentService {
     }
 
     return this.toResponse(appointment);
+  }
+
+  // TROCA O ESTADO DA CONSULTA. A ordem das respostas: 404 (não existe), 403 (o doctor que não é o médico desta consulta),
+  // 422 (o ciclo de vida não permite a troca) e 403 (o perfil não pode fazer esta troca). Só então grava
+  async changeStatus(
+    id: number,
+    input: UpdateAppointmentStatusDto,
+    user: AuthUser,
+  ) {
+    const appointment = await this.appointmentRepository.findById(id); // a consulta, ou null
+    if (!appointment) {
+      throw new AppException(
+        'RECURSO_NAO_ENCONTRADO',
+        'Consulta não encontrada',
+      );
+    }
+
+    // quem é este usuário em relação a ESTA consulta: admin, secretary e/ou o médico dela
+    const actors = await this.resolveActors(user, appointment);
+
+    // o doctor (sem admin) que não é o médico desta consulta nunca mexe nela, e também não descobre em que estado ela está
+    if (this.isOnlyDoctor(user) && !actors.includes('appointmentDoctor')) {
+      throw new AppException(
+        'ACESSO_NEGADO',
+        'O médico só pode alterar as próprias consultas',
+      );
+    }
+
+    // a lista de papéis que podem fazer a troca, ou null = a troca não existe (inclusive ficar no mesmo estado)
+    const allowed = this.rules.actorsForTransition(
+      appointment.status,
+      input.status,
+    );
+    if (!allowed) {
+      throw new AppException(
+        'TRANSICAO_INVALIDA',
+        `A consulta está ${appointment.status} e não pode passar para ${input.status}`,
+      );
+    }
+
+    // a autoridade: o usuário é um dos que podem fazer esta troca? secretary × ['appointmentDoctor', 'admin'] → false → 403
+    if (!allowed.some((actor) => actors.includes(actor))) {
+      throw new AppException(
+        'ACESSO_NEGADO',
+        'Seu perfil não pode fazer esta troca de estado',
+      );
+    }
+
+    // grava só se a consulta ainda estiver no estado lido; se outra requisição chegou antes, a troca deixou de ser válida
+    const changed = await this.appointmentRepository.updateStatus(
+      id,
+      appointment.status,
+      input.status,
+    );
+    if (!changed) {
+      throw new AppException(
+        'TRANSICAO_INVALIDA',
+        'A consulta mudou de estado enquanto a troca era feita',
+      );
+    }
+
+    return { ...this.toResponse(appointment), status: input.status }; // os seis campos, com o estado novo
+  }
+
+  // O que este usuário é em relação a esta consulta: admin, secretary e/ou appointmentDoctor se é doctor e o registro dele é o doctorId da consulta
+  private async resolveActors(
+    user: AuthUser,
+    appointment: Appointment,
+  ): Promise<StatusActor[]> {
+    const actors: StatusActor[] = [];
+    if (user.roles.includes('admin')) actors.push('admin');
+    if (user.roles.includes('secretary')) actors.push('secretary');
+    if (user.roles.includes('doctor')) {
+      // só consulta o médico quando o usuário tem o perfil doctor (o admin e a secretária não gastam essa consulta ao banco)
+      const own = await this.doctorRepository.findByUserId(user.id);
+      if (own?.id === appointment.doctorId) actors.push('appointmentDoctor');
+    }
+    return actors;
   }
 
   // "É só médico": tem o perfil doctor e não tem o admin (quem acumula os dois é tratado como admin)

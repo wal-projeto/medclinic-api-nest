@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { AppException } from '../@common/exceptions/app.exception';
 import { Doctor } from '../doctor/doctor.entity';
 import { WorkShift } from '../doctor/work-shift.entity';
+import { APPOINTMENT_STATUSES } from './appointment.entity';
 import { AppointmentRulesService } from './appointment-rules.service';
 
 // Um turno como o banco devolve: a hora com segundos ("08:00:00")
@@ -323,6 +324,42 @@ describe('AppointmentRulesService', () => {
       expect(erro).toBeInstanceOf(AppException);
       expect(erro?.errorCode).toBe('DADOS_INVALIDOS');
       expect(erro?.message).toBe('from must not be after to');
+    });
+  });
+
+  describe('actorsForTransition', () => {
+    // O ciclo de vida: as quatro trocas que existem e quem pode fazer cada uma (o médico da consulta aparece em todas)
+    it('diz quem pode fazer cada uma das quatro trocas do ciclo', () => {
+      expect(rules.actorsForTransition('scheduled', 'in_progress')).toEqual([
+        'appointmentDoctor',
+        'admin',
+      ]);
+      expect(rules.actorsForTransition('scheduled', 'cancelled')).toEqual([
+        'admin',
+        'secretary',
+        'appointmentDoctor',
+      ]);
+      expect(rules.actorsForTransition('in_progress', 'done')).toEqual([
+        'appointmentDoctor',
+        'admin',
+      ]);
+      expect(rules.actorsForTransition('in_progress', 'cancelled')).toEqual([
+        'admin',
+        'appointmentDoctor',
+      ]);
+    });
+
+    // De 16 combinações de estado, só 4 existem; as outras 12 (inclusive ficar no mesmo estado e sair de done ou cancelled) dão null
+    it('devolve null para as 12 trocas que o ciclo não permite', () => {
+      const proibidas = APPOINTMENT_STATUSES.flatMap((de) =>
+        APPOINTMENT_STATUSES.map((para) => [de, para] as const),
+      ).filter(([de, para]) => rules.actorsForTransition(de, para) === null);
+
+      expect(proibidas).toHaveLength(12);
+      expect(rules.actorsForTransition('done', 'cancelled')).toBeNull();
+      expect(rules.actorsForTransition('cancelled', 'scheduled')).toBeNull();
+      expect(rules.actorsForTransition('scheduled', 'scheduled')).toBeNull();
+      expect(rules.actorsForTransition('scheduled', 'done')).toBeNull();
     });
   });
 });

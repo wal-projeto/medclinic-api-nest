@@ -79,6 +79,10 @@ class AppointmentRepositoryFake implements AppointmentRepository {
     return Promise.resolve(null);
   }
 
+  updateStatus(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
   findActiveByDoctorInPeriod(
     doctorId: number,
     from: Date,
