@@ -53,6 +53,11 @@ class DoctorRepositoryFake implements DoctorRepository {
 
   constructor(readonly doctors: Doctor[]) {}
 
+  // O DoctorService não usa a busca pelo usuário: existe só porque o implements obriga
+  findByUserId(): Promise<Doctor | null> {
+    return Promise.resolve(null);
+  }
+
   // "Existe?" = algum médico da lista tem esse CRM
   existsByCrm(crm: string): Promise<boolean> {
     return Promise.resolve(this.doctors.some((d) => d.crm === crm));

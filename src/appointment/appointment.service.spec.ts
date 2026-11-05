@@ -9,8 +9,11 @@ import {
 import { WorkShift } from '../doctor/work-shift.entity';
 import { Patient } from '../patient/patient.entity';
 import { PatientPage, PatientRepository } from '../patient/patient.repository';
+import type { AuthUser } from '../auth/jwt.service';
 import { Appointment } from './appointment.entity';
 import {
+  AppointmentFilter,
+  AppointmentPage,
   AppointmentRepository,
   AssertFree,
   LOOKBACK_MS,
@@ -18,6 +21,7 @@ import {
 } from './appointment.repository';
 import { AppointmentRulesService } from './appointment-rules.service';
 import { AppointmentService } from './appointment.service';
+import { ListAppointmentsQueryDto } from './dtos/list-appointments-query.dto';
 
 // FAKE DO MÉDICO: o service só usa o findById; os outros métodos existem porque o implements obriga
 class DoctorRepositoryFake implements DoctorRepository {
@@ -25,6 +29,13 @@ class DoctorRepositoryFake implements DoctorRepository {
 
   findById(id: number): Promise<Doctor | null> {
     return Promise.resolve(this.doctors.find((d) => d.id === id) ?? null);
+  }
+
+  // o médico do usuário de acesso (o doctor() abaixo põe o usuário 100 + id no médico)
+  findByUserId(userId: number): Promise<Doctor | null> {
+    return Promise.resolve(
+      this.doctors.find((d) => d.user.id === userId) ?? null,
+    );
   }
 
   existsByCrm(): Promise<boolean> {
@@ -131,6 +142,30 @@ class AppointmentRepositoryFake implements AppointmentRepository {
   findActiveByDoctorInPeriod(): Promise<Appointment[]> {
     return Promise.reject(new Error('não usado'));
   }
+
+  // a listagem: anota cada pedido (pages) e faz o que o banco faria: filtra, ordena por início (e id) e fatia por skip e take
+  pages: AppointmentFilter[] = [];
+
+  findPage(filter: AppointmentFilter): Promise<AppointmentPage> {
+    this.pages.push(filter);
+    const casam = this.stored
+      .filter(
+        (a) =>
+          (filter.doctorId === undefined || a.doctorId === filter.doctorId) &&
+          (filter.patientId === undefined ||
+            a.patientId === filter.patientId) &&
+          (filter.status === undefined || a.status === filter.status) &&
+          (!filter.from || a.startsAt >= filter.from) &&
+          (!filter.to || a.startsAt < filter.to),
+      )
+      .sort(
+        (a, b) => a.startsAt.getTime() - b.startsAt.getTime() || a.id - b.id,
+      );
+    return Promise.resolve({
+      appointments: casam.slice(filter.skip, filter.skip + filter.take),
+      total: casam.length,
+    });
+  }
 }
 
 describe('AppointmentService', () => {
@@ -138,7 +173,7 @@ describe('AppointmentService', () => {
   const doctor = (id: number): Doctor => ({
     id,
     crm: `CRM-SC-1000${id}`,
-    user: undefined as unknown as Doctor['user'],
+    user: { id: 100 + id } as unknown as Doctor['user'],
     createdAt: agora,
     updatedAt: agora,
   });
@@ -173,8 +208,9 @@ describe('AppointmentService', () => {
     startsAt: string,
     endsAt: string,
     status: Appointment['status'] = 'scheduled',
+    id = 7,
   ): Appointment => ({
-    id: 7,
+    id,
     doctorId,
     patientId,
     startsAt: new Date(startsAt),
@@ -374,5 +410,219 @@ describe('AppointmentService', () => {
     const resultado = await service.create(corpo('2026-10-13T08:00:00-03:00'));
 
     expect(resultado.endsAt).toEqual(new Date('2026-10-13T11:30:00.000Z'));
+  });
+
+  describe('list', () => {
+    // a query como o pipe entrega: page e pageSize sempre vêm (com o padrão), o resto só se veio na URL
+    const query = (extra: Partial<ListAppointmentsQueryDto> = {}) => ({
+      page: 1,
+      pageSize: 20,
+      ...extra,
+    });
+    const admin: AuthUser = { id: 1, roles: ['admin'] };
+    const secretary: AuthUser = { id: 2, roles: ['secretary'] };
+    const helena: AuthUser = { id: 102, roles: ['doctor'] }; // o usuário da Dra. Helena (médico 2)
+    // três consultas: duas da Helena (2) e uma do médico 3, fora da ordem de início
+    const tresConsultas = () => [
+      marcada(
+        2,
+        11,
+        '2026-10-15T11:00:00.000Z',
+        '2026-10-15T11:30:00.000Z',
+        'scheduled',
+        3,
+      ),
+      marcada(
+        2,
+        10,
+        '2026-10-13T11:00:00.000Z',
+        '2026-10-13T11:30:00.000Z',
+        'scheduled',
+        1,
+      ),
+      marcada(
+        3,
+        10,
+        '2026-10-14T11:00:00.000Z',
+        '2026-10-14T11:30:00.000Z',
+        'done',
+        2,
+      ),
+    ];
+
+    // O caminho feliz: da mais cedo para a mais tarde, só os seis campos, e o meta da paginação
+    it('devolve a página, da mais cedo para a mais tarde, com os seis campos de cada consulta', async () => {
+      montar(tresConsultas());
+
+      const resultado = await service.list(query(), admin);
+
+      expect(resultado.data.map((a) => a.id)).toEqual([1, 2, 3]);
+      expect(Object.keys(resultado.data[0])).toEqual([
+        'id',
+        'doctorId',
+        'patientId',
+        'startsAt',
+        'endsAt',
+        'status',
+      ]);
+      expect(resultado.meta).toEqual({
+        total: 3,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
+    });
+
+    // Os filtros chegam à porta como vieram, e o período vira dois instantes (dias inteiros, no relógio de São Paulo)
+    it('repassa os filtros e converte from e to em instantes', async () => {
+      await service.list(
+        query({
+          doctorId: 2,
+          patientId: 10,
+          status: 'scheduled',
+          from: '2026-10-12',
+          to: '2026-10-16',
+        }),
+        admin,
+      );
+
+      expect(appointments.pages).toEqual([
+        {
+          doctorId: 2,
+          patientId: 10,
+          status: 'scheduled',
+          from: new Date('2026-10-12T03:00:00.000Z'),
+          to: new Date('2026-10-17T03:00:00.000Z'),
+          skip: 0,
+          take: 20,
+        },
+      ]);
+    });
+
+    // O período pode ter só um dos lados; o que não veio não vira filtro
+    it('aceita só o from ou só o to', async () => {
+      await service.list(query({ from: '2026-10-12' }), admin);
+      await service.list(query({ to: '2026-10-16' }), admin);
+
+      expect(appointments.pages[0].from).toEqual(
+        new Date('2026-10-12T03:00:00.000Z'),
+      );
+      expect(appointments.pages[0].to).toBeUndefined();
+      expect(appointments.pages[1].from).toBeUndefined();
+      expect(appointments.pages[1].to).toEqual(
+        new Date('2026-10-17T03:00:00.000Z'),
+      );
+    });
+
+    // A conta da paginação: a página 2 de tamanho 2 pula 2 e pega 2
+    it('transforma page e pageSize em skip e take e devolve o meta', async () => {
+      montar(tresConsultas());
+
+      const resultado = await service.list(
+        query({ page: 2, pageSize: 2 }),
+        admin,
+      );
+
+      expect(appointments.pages[0].skip).toBe(2);
+      expect(appointments.pages[0].take).toBe(2);
+      expect(resultado.data.map((a) => a.id)).toEqual([3]);
+      expect(resultado.meta).toEqual({
+        total: 3,
+        page: 2,
+        pageSize: 2,
+        totalPages: 2,
+      });
+    });
+
+    // Nada casa: a lista vazia é um 200 normal, com totalPages 0
+    it('devolve a lista vazia quando nenhuma consulta casa', async () => {
+      const resultado = await service.list(query({ status: 'done' }), admin);
+
+      expect(resultado.data).toEqual([]);
+      expect(resultado.meta).toEqual({
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        totalPages: 0,
+      });
+    });
+
+    // A secretaria e o admin enxergam as consultas de todos os médicos
+    it('não limita a secretaria a um médico', async () => {
+      montar(tresConsultas());
+
+      const resultado = await service.list(query(), secretary);
+
+      expect(appointments.pages[0].doctorId).toBeUndefined();
+      expect(resultado.data).toHaveLength(3);
+    });
+
+    // O filtro forçado por perfil: o doctor só vê as consultas do próprio médico, mesmo sem mandar nada
+    it('limita o doctor às consultas do próprio médico', async () => {
+      montar(tresConsultas());
+
+      const resultado = await service.list(query(), helena);
+
+      expect(appointments.pages[0].doctorId).toBe(2);
+      expect(resultado.data.map((a) => a.id)).toEqual([1, 3]);
+      expect(resultado.data.every((a) => a.doctorId === 2)).toBe(true);
+    });
+
+    it('deixa o doctor pedir o próprio médico', async () => {
+      montar(tresConsultas());
+
+      const resultado = await service.list(query({ doctorId: 2 }), helena);
+
+      expect(resultado.data.map((a) => a.id)).toEqual([1, 3]);
+    });
+
+    // Pedir o médico de outro não vaza nada: lista vazia, e a busca nem acontece
+    it('devolve a lista vazia quando o doctor pede o médico de outro, sem consultar', async () => {
+      montar(tresConsultas());
+
+      const resultado = await service.list(query({ doctorId: 3 }), helena);
+
+      expect(resultado.data).toEqual([]);
+      expect(resultado.meta.total).toBe(0);
+      expect(appointments.pages).toHaveLength(0);
+    });
+
+    // Usuário doctor que não tem registro de médico (por exemplo, criado pelo POST /users): não há o que listar
+    it('devolve a lista vazia quando o doctor não tem registro de médico, sem consultar', async () => {
+      montar(tresConsultas());
+
+      const resultado = await service.list(query(), {
+        id: 555,
+        roles: ['doctor'],
+      });
+
+      expect(resultado.data).toEqual([]);
+      expect(appointments.pages).toHaveLength(0);
+    });
+
+    // Quem tem os dois perfis (doctor e admin) não é limitado: o admin vence
+    it('não limita quem é doctor e admin ao mesmo tempo', async () => {
+      montar(tresConsultas());
+
+      const resultado = await service.list(query(), {
+        id: 102,
+        roles: ['doctor', 'admin'],
+      });
+
+      expect(appointments.pages[0].doctorId).toBeUndefined();
+      expect(resultado.data).toHaveLength(3);
+    });
+
+    // from depois de to: 400, antes de qualquer busca
+    it('lança 400 quando from é depois de to, sem consultar', async () => {
+      const erro = await service
+        .list(query({ from: '2026-10-16', to: '2026-10-12' }), admin)
+        .catch((err) => err);
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro.errorCode).toBe('DADOS_INVALIDOS');
+      expect(erro.message).toBe('from must not be after to');
+      expect(appointments.pages).toHaveLength(0);
+    });
   });
 });

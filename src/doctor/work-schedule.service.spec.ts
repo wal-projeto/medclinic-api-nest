@@ -29,6 +29,10 @@ class DoctorRepositoryFake implements DoctorRepository {
   findPage(): Promise<DoctorPage> {
     return Promise.resolve({ doctors: [], total: 0 });
   }
+
+  findByUserId(): Promise<Doctor | null> {
+    return Promise.resolve(null);
+  }
 }
 
 // FAKE DA ESCALA: guarda os turnos que já "estão no banco" (stored), anota o que o service

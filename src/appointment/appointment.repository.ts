@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Appointment } from './appointment.entity';
+import { Appointment, AppointmentStatus } from './appointment.entity';
 
 // NewAppointment = só os campos que mandamos gravar. O id e as datas de criação o banco preenche
 export type NewAppointment = Pick<
@@ -9,6 +9,20 @@ export type NewAppointment = Pick<
 
 // Nenhuma consulta dura mais de 1440 minutos (um dia): quem se sobrepõe a uma consulta nova começou, no máximo, um dia antes dela
 export const LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+// O pedido da listagem: os filtros (todos opcionais), quanto pular e quanto pegar.
+// { doctorId: 2, status: 'scheduled', from: 2026-10-12T03:00Z, to: 2026-10-17T03:00Z, skip: 0, take: 20 }
+export type AppointmentFilter = {
+  doctorId?: number;
+  patientId?: number;
+  status?: AppointmentStatus;
+  from?: Date; // começa em from (incluído)
+  to?: Date; // até to (excluído)
+  skip: number;
+  take: number;
+};
+// A resposta: a fatia e o total (de tudo o que casa com o filtro, e não só da fatia)
+export type AppointmentPage = { appointments: Appointment[]; total: number };
 
 // A regra de conflito que o service entrega ao repositório: recebe as consultas ativas do médico e do paciente
 // que podem se sobrepor à nova e LANÇA um AppException se alguma se sobrepõe
@@ -35,4 +49,8 @@ export abstract class AppointmentRepository {
     from: Date,
     to: Date,
   ): Promise<Appointment[]>;
+
+  // "liste as consultas (com os filtros que vierem), da mais cedo para a mais tarde, uma página de cada vez e com o total"
+  // (nenhuma consulta casa: { appointments: [], total: 0 })
+  abstract findPage(filter: AppointmentFilter): Promise<AppointmentPage>;
 }

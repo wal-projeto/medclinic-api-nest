@@ -86,6 +86,24 @@ export class AppointmentRulesService {
     };
   }
 
+  // O período da listagem: from e to são opcionais e, quando vêm, valem o DIA INTEIRO no relógio da clínica (o mesmo cálculo da agenda,
+  // sem o limite de 31 dias). Devolve o primeiro instante (meia-noite de from) e o instante em que acaba (meia-noite depois de to, fora).
+  // O que não veio fica de fora. 400 se from é depois de to
+  resolveListPeriod(from?: string, to?: string): { from?: Date; to?: Date } {
+    const fromDay = from ? Date.parse(`${from}T00:00:00Z`) : undefined;
+    const toDay = to ? Date.parse(`${to}T00:00:00Z`) : undefined;
+
+    if (fromDay !== undefined && toDay !== undefined && fromDay > toDay) {
+      throw new AppException('DADOS_INVALIDOS', 'from must not be after to');
+    }
+
+    return {
+      from: fromDay === undefined ? undefined : this.toClinicMidnight(fromDay),
+      to:
+        toDay === undefined ? undefined : this.toClinicMidnight(toDay + DAY_MS),
+    };
+  }
+
   // Há sobreposição quando uma começa antes de a outra terminar E a outra começa antes de a primeira terminar.
   // A comparação é estrita (<): períodos encostados (10:00-10:30 e 10:30-11:00) NÃO conflitam
   hasOverlap(existing: Period[], period: Period): boolean {

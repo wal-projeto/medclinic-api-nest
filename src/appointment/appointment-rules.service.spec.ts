@@ -283,4 +283,46 @@ describe('AppointmentRulesService', () => {
       expect(erro?.message).toBe('from must not be after to');
     });
   });
+
+  describe('resolveListPeriod', () => {
+    it('devolve os dois instantes quando vêm from e to (dias inteiros, no relógio da clínica)', () => {
+      const period = rules.resolveListPeriod('2026-10-12', '2026-10-16');
+
+      expect(period.from).toEqual(new Date('2026-10-12T03:00:00.000Z'));
+      expect(period.to).toEqual(new Date('2026-10-17T03:00:00.000Z'));
+    });
+
+    // O que não veio fica de fora: só o começo, só o fim, ou nada
+    it('devolve só o que veio', () => {
+      expect(rules.resolveListPeriod('2026-10-12', undefined)).toEqual({
+        from: new Date('2026-10-12T03:00:00.000Z'),
+        to: undefined,
+      });
+      expect(rules.resolveListPeriod(undefined, '2026-10-16')).toEqual({
+        from: undefined,
+        to: new Date('2026-10-17T03:00:00.000Z'),
+      });
+      expect(rules.resolveListPeriod(undefined, undefined)).toEqual({
+        from: undefined,
+        to: undefined,
+      });
+    });
+
+    // A listagem não tem o limite de 31 dias da agenda: a paginação é o freio
+    it('aceita um período de um ano', () => {
+      expect(() =>
+        rules.resolveListPeriod('2026-01-01', '2026-12-31'),
+      ).not.toThrow();
+    });
+
+    it('recusa from depois de to (400)', () => {
+      const erro = capturar(() =>
+        rules.resolveListPeriod('2026-10-16', '2026-10-12'),
+      );
+
+      expect(erro).toBeInstanceOf(AppException);
+      expect(erro?.errorCode).toBe('DADOS_INVALIDOS');
+      expect(erro?.message).toBe('from must not be after to');
+    });
+  });
 });

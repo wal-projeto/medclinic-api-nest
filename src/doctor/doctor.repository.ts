@@ -20,4 +20,5 @@ export abstract class DoctorRepository {
   abstract createWithUser(data: NewDoctor): Promise<Doctor>; // "grave o usuário e o médico juntos, ou nenhum dos dois"
   abstract findPage(filter: DoctorFilter): Promise<DoctorPage>; // "liste os médicos, com paginação e filtro por nome"
   abstract findById(id: number): Promise<Doctor | null>; // "me dê o médico deste número, ou null se não houver"
+  abstract findByUserId(userId: number): Promise<Doctor | null>; // "me dê o médico deste usuário de acesso, ou null se o usuário não tem registro de médico"
 }
