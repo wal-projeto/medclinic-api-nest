@@ -7,6 +7,7 @@ import {
   Not,
   Repository,
 } from 'typeorm';
+import { MAX_INTEGER } from '../@common/database/postgres-limits';
 import { Doctor } from '../doctor/doctor.entity';
 import { Appointment } from './appointment.entity';
 import {
@@ -109,5 +110,14 @@ export class AppointmentTypeormRepository implements AppointmentRepository {
       take,
     });
     return { appointments, total };
+  }
+
+  // SELECT ... WHERE id = $1 LIMIT 1. Número que não cabe num integer do banco: null sem consultar (vira 404)
+  findById(id: number): Promise<Appointment | null> {
+    if (id < 1 || id > MAX_INTEGER) {
+      // 0, -1, 99999999999 → entra no if
+      return Promise.resolve(null);
+    }
+    return this.repository.findOne({ where: { id } }); // O que acontece: SELECT ... WHERE id = $1 LIMIT 1. Com valor: findOne({ where: { id: 7 } }) → a consulta 7, ou null
   }
 }
