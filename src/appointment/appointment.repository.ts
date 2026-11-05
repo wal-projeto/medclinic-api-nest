@@ -56,4 +56,12 @@ export abstract class AppointmentRepository {
 
   // "me dê a consulta deste número, ou null se não houver"
   abstract findById(id: number): Promise<Appointment | null>;
+
+  // "troque o estado desta consulta de `from` para `to`, mas SÓ se ela ainda estiver em `from`": true se trocou, false se não
+  // (outra requisição já mexeu nela). A troca e a conferência acontecem num comando só
+  abstract updateStatus(
+    id: number,
+    from: AppointmentStatus,
+    to: AppointmentStatus,
+  ): Promise<boolean>;
 }
