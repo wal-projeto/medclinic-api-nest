@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppException } from '../@common/exceptions/app.exception';
+import { paginate } from '../@common/pagination/paginated';
+import { PaginationQueryDto } from '../@common/pagination/pagination-query.dto';
 import { AppointmentStatus } from '../appointment/appointment.entity';
 import { AppointmentRepository } from '../appointment/appointment.repository';
 import type { AuthUser } from '../auth/jwt.service';
@@ -40,14 +42,7 @@ export class MedicalRecordService {
     const doctor = await this.doctorRepository.findByUserId(user.id);
 
     // 3) o vínculo com este paciente: uma consulta entre os dois em andamento ou concluída (403)
-    if (
-      !doctor ||
-      !(await this.appointmentRepository.existsByDoctorAndPatient(
-        doctor.id,
-        patientId,
-        LINK_STATUSES,
-      ))
-    ) {
+    if (!doctor || !(await this.hasLink(doctor.id, patientId))) {
       throw new AppException(
         'ACESSO_NEGADO',
         'Só o médico que atendeu o paciente pode escrever no prontuário',
@@ -61,6 +56,58 @@ export class MedicalRecordService {
       text: input.text,
     });
     return this.toResponse(saved);
+  }
+
+  // LISTA O PRONTUÁRIO DO PACIENTE, do registro mais novo para o mais antigo, com paginação. Quem lê: o admin (para auditoria, sem
+  // vínculo) e o médico que atendeu o paciente. A ordem das respostas: 404 (o paciente não existe) e 403 (médico sem vínculo)
+  async list(patientId: number, query: PaginationQueryDto, user: AuthUser) {
+    // 1) o paciente existe (404)
+    if (!(await this.patientRepository.findById(patientId))) {
+      throw new AppException(
+        'RECURSO_NAO_ENCONTRADO',
+        'Paciente não encontrado',
+      );
+    }
+
+    // 2) quem é só médico (sem admin) precisa ter registro de médico e vínculo com ESTE paciente (403). O admin lê sem vínculo
+    if (this.isOnlyDoctor(user)) {
+      const doctor = await this.doctorRepository.findByUserId(user.id);
+      if (!doctor || !(await this.hasLink(doctor.id, patientId))) {
+        throw new AppException(
+          'ACESSO_NEGADO',
+          'Só o médico que atendeu o paciente pode ler o prontuário',
+        );
+      }
+    }
+
+    // 3) a página pedida (page e pageSize viram skip e take) e o total de registros do paciente
+    const { records, total } =
+      await this.medicalRecordRepository.findPageByPatientId({
+        patientId,
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      });
+
+    return paginate(
+      records.map((record) => this.toResponse(record)),
+      total,
+      query.page,
+      query.pageSize,
+    );
+  }
+
+  // O vínculo do médico com o paciente: existe consulta entre os dois em andamento ou concluída? (a regra está em LINK_STATUSES)
+  private hasLink(doctorId: number, patientId: number): Promise<boolean> {
+    return this.appointmentRepository.existsByDoctorAndPatient(
+      doctorId,
+      patientId,
+      LINK_STATUSES,
+    );
+  }
+
+  // "É só médico": tem o perfil doctor e não tem o admin (quem acumula os dois é tratado como admin: lê sem vínculo)
+  private isOnlyDoctor(user: AuthUser): boolean {
+    return user.roles.includes('doctor') && !user.roles.includes('admin');
   }
 
   // O contrato: id, patientId, doctorId, text e createdAt (sem os objetos patient e doctor). A data sai em UTC (ISO) no JSON
